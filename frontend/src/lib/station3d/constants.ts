@@ -26,7 +26,8 @@ export const PILLAR_SPACING = 8;
 
 export const TRAIN_CAR_LENGTH = 5.6;
 export const TRAIN_CARS = 3;
-export const TRAIN_LENGTH = TRAIN_CAR_LENGTH * TRAIN_CARS;
+export const TRAIN_CAR_GAP = 0.3;
+export const TRAIN_LENGTH = TRAIN_CAR_LENGTH * TRAIN_CARS + (TRAIN_CARS - 1) * TRAIN_CAR_GAP;
 export const TRAIN_WIDTH = 2.9;
 export const TRAIN_HEIGHT = 3.4;
 

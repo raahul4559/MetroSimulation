@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -22,41 +22,54 @@ const CAMERA_FOLLOW_LERP = 0.08;
  * doing the most "story," boarding/stopped ranked above a train still out on the approach. */
 const FOLLOW_PRIORITY: readonly TrainPhase3D[] = ["BOARDING", "STOPPED", "ARRIVING", "APPROACHING", "DEPARTING"];
 
+interface FramingPreset {
+  position: readonly [number, number, number];
+  target: readonly [number, number, number];
+}
+
 /**
  * Owns the camera for all four modes. OVERVIEW/FREE/PASSENGER hand the camera to drei's
- * `OrbitControls` (with different constraints); FOLLOW disables it and drives the camera itself
- * every frame from the tracked train's real pose (see `trainPose3D`) — the two never fight over the
- * same camera in the same mode.
+ * `OrbitControls`; FOLLOW disables it and drives the camera itself every frame from the tracked
+ * train's real pose (see `trainPose3D`) — the two never fight over the same camera in the same mode.
+ *
+ * <p>`OrbitControls` keeps its own internal orbit angle/distance that user dragging accumulates
+ * into — it does NOT re-derive that state just because `camera.position` is set elsewhere, so
+ * switching mode by mutating position alone leaves the *previous* mode's orbit angle in charge
+ * (a real bug caught in manual testing: Passenger View inherited Overview's steep downward angle).
+ * The fix is to force a **fresh** `OrbitControls` instance per mode (via `key`, with its initial
+ * `target` passed as a controlled prop) and make sure `camera.position` is already correct
+ * *before* that instance constructs — done synchronously during render (guarded by a small
+ * previous-render comparison, React's own sanctioned "adjust state during render" pattern, so it
+ * only fires on an actual mode/reset change and never on a re-render from live train data), not in
+ * a `useEffect` whose ordering relative to the child `OrbitControls`' own mount isn't guaranteed.
  */
 export function CameraController({ mode, layout, trains, resetToken }: CameraControllerProps) {
   const { camera } = useThree();
-  // three-stdlib's OrbitControls type varies by version; the ref is only ever used for
-  // `.target`/`.update()`, which is stable across the versions drei supports.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const orbitRef = useRef<any>(null);
 
   const stationCenterX = ((layout.platforms.length - 1) * MODULE_SPACING) / 2;
   const firstModuleX = (layout.platforms[0]?.moduleIndex ?? 0) * MODULE_SPACING;
 
-  useEffect(() => {
-    if (mode === "OVERVIEW") {
-      camera.position.set(stationCenterX + 14, 24, 44);
-      orbitRef.current?.target.set(stationCenterX, 2, 0);
-      orbitRef.current?.update();
-    } else if (mode === "FREE") {
-      camera.position.set(stationCenterX - 10, 16, 34);
-      orbitRef.current?.target.set(stationCenterX, 1, 0);
-      orbitRef.current?.update();
-    } else if (mode === "PASSENGER") {
-      const eye = new THREE.Vector3(firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4);
-      camera.position.copy(eye);
-      const target = eye.clone().add(new THREE.Vector3(0, 0, 1));
-      orbitRef.current?.target.copy(target);
-      orbitRef.current?.update();
+  const framing = useMemo<FramingPreset>(() => {
+    if (mode === "FREE") {
+      return { position: [stationCenterX - 10, 16, 34], target: [stationCenterX, 1, 0] };
     }
-    // Re-run whenever the mode OR the explicit reset button changes — not on every layout re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, resetToken, stationCenterX, firstModuleX]);
+    if (mode === "PASSENGER") {
+      return { position: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4], target: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4 + 1] };
+    }
+    // OVERVIEW and FOLLOW (FOLLOW never renders OrbitControls, but still needs a harmless default).
+    return { position: [stationCenterX + 18, 28, 54], target: [stationCenterX, 2, 0] };
+  }, [mode, stationCenterX, firstModuleX]);
+
+  // React's own "adjust state during render" pattern (not a ref, not an effect — see
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders):
+  // applies the new framing's camera position exactly once per mode/reset change, synchronously
+  // before `OrbitControls` (a child) constructs, and never on a re-render from live train data.
+  const framingKey = `${mode}-${resetToken}`;
+  const [appliedKey, setAppliedKey] = useState<string | null>(null);
+  if (appliedKey !== framingKey) {
+    setAppliedKey(framingKey);
+    camera.position.set(...framing.position);
+  }
 
   const followTarget = useMemo(() => pickFollowTrain(trains), [trains]);
 
@@ -77,11 +90,12 @@ export function CameraController({ mode, layout, trains, resetToken }: CameraCon
 
   return (
     <OrbitControls
-      ref={orbitRef}
+      key={framingKey}
+      target={framing.target}
       enablePan={mode === "FREE"}
       enableZoom={mode !== "PASSENGER"}
-      minDistance={mode === "PASSENGER" ? 1 : 8}
-      maxDistance={mode === "PASSENGER" ? 1 : mode === "FREE" ? 160 : 90}
+      minDistance={mode === "PASSENGER" ? 0.5 : 8}
+      maxDistance={mode === "PASSENGER" ? 0.5 : mode === "FREE" ? 160 : 90}
       maxPolarAngle={Math.PI / 2.05}
     />
   );

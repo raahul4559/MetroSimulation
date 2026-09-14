@@ -5,7 +5,8 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PlatformLayout3D, TrainVisual3D } from "@/domain/station3d";
 import { trainPose3D } from "@/lib/station3d/position";
-import { TRAIN_CARS, TRAIN_CAR_LENGTH, TRAIN_HEIGHT, TRAIN_WIDTH } from "@/lib/station3d/constants";
+import { TRAIN_CARS, TRAIN_CAR_LENGTH, TRAIN_HEIGHT, TRAIN_LENGTH, TRAIN_WIDTH } from "@/lib/station3d/constants";
+import { trainCarCenters } from "@/lib/station3d/trainLayout";
 
 interface MetroTrain3DProps {
   visual: TrainVisual3D;
@@ -14,7 +15,6 @@ interface MetroTrain3DProps {
   onSelect: () => void;
 }
 
-const CAR_GAP = 0.3;
 const DOOR_OPEN_OFFSET = 0.9;
 /** How fast the rendered (visual) position/door chases its target each frame — a fixed fraction of
  * the remaining distance, not a full snap. This is what makes motion look continuous even though
@@ -80,11 +80,8 @@ export function MetroTrain3D({ visual, platform, selected, onSelect }: MetroTrai
     }
   });
 
-  const totalLength = TRAIN_CARS * TRAIN_CAR_LENGTH + (TRAIN_CARS - 1) * CAR_GAP;
-  const carOffsets = useMemo(
-    () => Array.from({ length: TRAIN_CARS }, (_, i) => -totalLength / 2 + TRAIN_CAR_LENGTH / 2 + i * (TRAIN_CAR_LENGTH + CAR_GAP)),
-    [totalLength]
-  );
+  const totalLength = TRAIN_LENGTH;
+  const carOffsets = useMemo(() => trainCarCenters(), []);
 
   return (
     <group

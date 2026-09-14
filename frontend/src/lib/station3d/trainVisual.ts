@@ -36,6 +36,7 @@ export function selectStationTrainVisuals(
       capacity: train.capacity,
       delaySeconds: train.delaySeconds,
       destinationStationName: destinationName(train, line, stationsById),
+      nextStationName: nextStationNameFor(train, platform, stationsById),
     });
   }
   return visuals;
@@ -91,6 +92,15 @@ function destinationName(train: TrainState, line: Line | undefined, stationsById
   if (!line || line.stations.length === 0) return "";
   const terminus = train.direction === "OUTBOUND" ? line.stations[line.stations.length - 1] : line.stations[0];
   return (terminus && stationsById.get(terminus.id)?.name) ?? terminus?.name ?? "";
+}
+
+/** This train's immediate next stop after this station, in its direction of travel — the real
+ * adjacent station id already resolved onto {@link PlatformLayout3D} (outbound/inbound neighbor),
+ * not re-derived from the line's station list here. Empty string at a terminus, where that
+ * direction's neighbor is `null`. */
+function nextStationNameFor(train: TrainState, platform: PlatformLayout3D, stationsById: ReadonlyMap<number, Station>): string {
+  const neighborId = train.direction === "OUTBOUND" ? platform.outboundNeighborId : platform.inboundNeighborId;
+  return neighborId == null ? "" : (stationsById.get(neighborId)?.name ?? "");
 }
 
 function clamp01(value: number): number {

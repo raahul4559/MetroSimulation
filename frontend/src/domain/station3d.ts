@@ -64,6 +64,32 @@ export interface TrainVisual3D {
   readonly capacity: number;
   readonly delaySeconds: number;
   readonly destinationStationName: string;
+  /** This train's immediate next stop after (or, if still short of the station, at) this station —
+   * the real adjacent station from {@code PlatformLayout3D}'s neighbor ids, not the final terminus.
+   * Empty string only when this leg has nowhere further to go (a terminating train). */
+  readonly nextStationName: string;
 }
 
 export type CameraMode3D = "OVERVIEW" | "PASSENGER" | "FOLLOW" | "FREE";
+
+/** The visual phase a *passenger* is in at a specific station/platform, derived from the shared
+ * {@code PassengerStatus} plus which platform their route puts them on — see
+ * {@code lib/station3d/passengerVisual.ts}. Distinct from {@code PassengerStatus} itself: this is
+ * already resolved to "where on this platform module do they belong right now," e.g. `ON_TRAIN`/
+ * `COMPLETED` passengers never produce a visual (nothing to place on a platform) so this type has no
+ * corresponding entries for them.
+ */
+export type PassengerPhase3D = "WAITING" | "BOARDING" | "ALIGHTING";
+
+/** One passenger's renderable target on a specific platform module — a pure position/phase
+ * derivation from real {@code Passenger} fields (route, currentStationId/currentTrainId, status).
+ * The rendering component (`Passengers3D`) owns walking the rendered position toward this target
+ * frame to frame; this is never itself animated or clocked. */
+export interface PassengerVisual3D {
+  readonly passengerId: number;
+  readonly phase: PassengerPhase3D;
+  readonly direction: TrainDirection;
+  /** Local platform-module coordinates (same space as `PlatformLayout3D`/`trainPose3D`). */
+  readonly targetX: number;
+  readonly targetZ: number;
+}

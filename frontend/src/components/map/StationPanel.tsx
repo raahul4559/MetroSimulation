@@ -21,7 +21,7 @@ interface StationPanelProps {
   passengers: readonly Passenger[];
   liveFeedStatus: ConnectionStatus;
   onClose: () => void;
-  onEnter3D?: (station: Station) => void;
+  onEnter3D?: ((station: Station) => void) | undefined;
 }
 
 const AT_STATION_STATUSES = new Set(["AT_STATION", "DWELLING"]);

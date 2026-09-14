@@ -73,25 +73,40 @@ export default function DashboardPage() {
       </header>
 
       <main className="grid flex-1 grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr_300px]">
-        <Panel title="Network map">
+        <Panel title={stationView3D ? `3D station — ${stationView3D.name}` : "Network map"}>
           {isLoading && <p className="text-sm text-slate-500">Loading network…</p>}
           {networkError && <p className="text-sm text-red-400">{networkError}</p>}
           {!isLoading && !networkError && (
             <div className="h-[65vh] min-h-[420px] w-full lg:h-[calc(100vh-160px)]">
-              <MetroMap
-                lines={lines}
-                stations={stations}
-                tracks={tracks}
-                trains={trains}
-                signals={signals}
-                passengers={passengers}
-                connectionStatus={connectionStatus}
-                hiddenLineCodes={hiddenLineCodes}
-                onToggleLine={toggleLine}
-                selectedTrainId={selectedTrainId}
-                onSelectTrain={selectTrain}
-                focusToken={focusToken}
-              />
+              {stationView3D ? (
+                // Same `trains`/`passengers`/`lines`/`stations` the 2D map reads, from the same
+                // `useTrainSimulation`/`useNetwork` hooks above — no separate data source or
+                // simulation, and switching back just unmounts this in favour of `MetroMap` again.
+                <StationScene
+                  station={stationView3D}
+                  lines={lines}
+                  stations={stations}
+                  trains={trains}
+                  passengers={passengers}
+                  onBack={() => setStationView3DId(null)}
+                />
+              ) : (
+                <MetroMap
+                  lines={lines}
+                  stations={stations}
+                  tracks={tracks}
+                  trains={trains}
+                  signals={signals}
+                  passengers={passengers}
+                  connectionStatus={connectionStatus}
+                  hiddenLineCodes={hiddenLineCodes}
+                  onToggleLine={toggleLine}
+                  selectedTrainId={selectedTrainId}
+                  onSelectTrain={selectTrain}
+                  focusToken={focusToken}
+                  onEnter3D={(station) => setStationView3DId(station.id)}
+                />
+              )}
             </div>
           )}
         </Panel>
