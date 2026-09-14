@@ -4,8 +4,8 @@ import type { AnalyticsRange, AnalyticsResponse } from "@/domain/trainsim/analyt
 export interface AnalyticsQuery {
   range: AnalyticsRange;
   /** ISO-8601 instants — required (and only used) when `range` is `"CUSTOM"`. */
-  from?: string;
-  to?: string;
+  from?: string | undefined;
+  to?: string | undefined;
 }
 
 export const analyticsApi = {

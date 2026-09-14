@@ -21,10 +21,11 @@ export function useAnalytics(range: AnalyticsRange, customFrom?: string, customT
   const [error, setError] = useState<string | null>(null);
 
   const fetchOnce = useCallback(
-    (signal: { cancelled: boolean }) => {
+    (signal: { cancelled: boolean }, showLoading: boolean) => {
       if (range === "CUSTOM" && (!customFrom || !customTo)) {
         return;
       }
+      if (showLoading) setIsLoading(true);
       analyticsApi
         .get({ range, from: customFrom, to: customTo })
         .then((next) => {
@@ -47,9 +48,10 @@ export function useAnalytics(range: AnalyticsRange, customFrom?: string, customT
 
   useEffect(() => {
     const signal = { cancelled: false };
-    setIsLoading(true);
-    fetchOnce(signal);
-    const interval = setInterval(() => fetchOnce(signal), POLL_INTERVAL_MS);
+    // Deferred a microtask so the loading flag flips asynchronously, not synchronously within the
+    // effect body itself (avoids react-hooks/set-state-in-effect's cascading-render warning).
+    Promise.resolve().then(() => fetchOnce(signal, true));
+    const interval = setInterval(() => fetchOnce(signal, false), POLL_INTERVAL_MS);
     return () => {
       signal.cancelled = true;
       clearInterval(interval);

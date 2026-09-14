@@ -35,7 +35,7 @@ export function LineChart({ series, height = 200, xFormat, yFormat, emptyMessage
   const hasData = series.some((s) => s.points.length > 0);
   const reference = series.find((s) => s.points.length > 0)?.points ?? [];
 
-  const { xMin, xMax, yMax, plotW, plotH, sx, sy } = useMemo(() => {
+  const { xMin, xMax, yMax, plotH, sx, sy } = useMemo(() => {
     const allPoints = series.flatMap((s) => s.points);
     const xs = allPoints.map((p) => p.x);
     const ys = allPoints.map((p) => p.y);
@@ -127,6 +127,7 @@ export function LineChart({ series, height = 200, xFormat, yFormat, emptyMessage
           if (s.points.length === 0) return null;
           const d = s.points.map((p, i) => `${i === 0 ? "M" : "L"} ${sx(p.x)} ${sy(p.y)}`).join(" ");
           const last = s.points[s.points.length - 1];
+          if (!last) return null;
           return (
             <g key={s.key}>
               <path d={d} fill="none" stroke={s.color} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />

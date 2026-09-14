@@ -47,7 +47,9 @@ async function request<T>(baseUrl: string, path: string, init?: RequestInit): Pr
 function createApiClient(baseUrl: string) {
   return {
     get: <T>(path: string) => request<T>(baseUrl, path),
-    post: <T>(path: string) => request<T>(baseUrl, path, { method: "POST" }),
+    post: <T>(path: string, body?: unknown) =>
+      request<T>(baseUrl, path, { method: "POST", ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }),
+    del: <T>(path: string) => request<T>(baseUrl, path, { method: "DELETE" }),
   };
 }
 

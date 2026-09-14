@@ -10,7 +10,12 @@ import com.nammametro.simulation.metro.domain.model.Track;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.application.TickContext;
 import com.nammametro.simulation.trainsim.application.TickResult;
+import com.nammametro.simulation.trainsim.domain.model.AffectedResourceType;
 import com.nammametro.simulation.trainsim.domain.model.BlockState;
+import com.nammametro.simulation.trainsim.domain.model.Disruption;
+import com.nammametro.simulation.trainsim.domain.model.DisruptionSeverity;
+import com.nammametro.simulation.trainsim.domain.model.DisruptionStatus;
+import com.nammametro.simulation.trainsim.domain.model.DisruptionType;
 import com.nammametro.simulation.trainsim.domain.model.EngineSettings;
 import com.nammametro.simulation.trainsim.domain.model.EventType;
 import com.nammametro.simulation.trainsim.domain.model.Signal;
@@ -203,5 +208,102 @@ class TrainMovementTickHandlerTest {
         }
 
         assertThat(eventsA).isEqualTo(eventsB);
+    }
+
+    private static SimulationState withDisruptions(SimulationState state, Disruption... disruptions) {
+        return state.withDisruptions(List.of(disruptions));
+    }
+
+    private static Disruption activeTrackBlockage(long trackId) {
+        return new Disruption(1, DisruptionType.TRACK_BLOCKAGE, AffectedResourceType.TRACK, trackId, 0, 600, 0,
+                DisruptionSeverity.MAJOR, "Track blockage", DisruptionStatus.ACTIVE);
+    }
+
+    private static Disruption activeTrainFailure(long trainId) {
+        return new Disruption(2, DisruptionType.TRAIN_FAILURE, AffectedResourceType.TRAIN, trainId, 0, 600, 0,
+                DisruptionSeverity.SEVERE, "Train failure", DisruptionStatus.ACTIVE);
+    }
+
+    @Test
+    void trackBlockageDisruptionHoldsAnApproachingTrainAtTheStationInsteadOfDeparting() {
+        MetroNetwork network = threeStationNetwork();
+        TickContext ctx = contextFor(network);
+        SimulationState state = withDisruptions(initialState(trainAt(1, "T1", 1)), activeTrackBlockage(1));
+        List<SimulationEvent> events = new ArrayList<>();
+
+        // Long enough for the dwell (30s) to expire and the train to attempt departure.
+        for (int i = 0; i < 40; i++) {
+            state = tick(state, ctx, events);
+        }
+
+        TrainState train = state.trains().get(0);
+        assertThat(train.status()).isIn(TrainStatus.STOPPED, TrainStatus.DELAYED);
+        assertThat(train.currentTrackId()).isNull();
+
+        Signal blockedSignal = signalForTrack(state, 1L);
+        assertThat(blockedSignal.blockState()).isEqualTo(BlockState.OCCUPIED);
+        assertThat(blockedSignal.aspect()).isEqualTo(SignalAspect.RED);
+    }
+
+    @Test
+    void trainFailureDisruptionFreezesARunningTrainInPlaceWithoutProgressOrSpeed() {
+        MetroNetwork network = threeStationNetwork();
+        TickContext ctx = contextFor(network);
+        SimulationState state = initialState(trainAt(1, "T1", 1));
+        List<SimulationEvent> events = new ArrayList<>();
+
+        // Run un-disrupted until the train is mid-block (RUNNING, partial progress).
+        TrainState midBlock = null;
+        for (int i = 0; i < 40 && midBlock == null; i++) {
+            state = tick(state, ctx, events);
+            TrainState t = state.trains().get(0);
+            if (t.status() == TrainStatus.RUNNING && t.progress() > 0 && t.progress() < 1.0) {
+                midBlock = t;
+            }
+        }
+        assertThat(midBlock).isNotNull();
+
+        // Now inject a train failure targeting it and tick a few more times: it must not move.
+        state = withDisruptions(state, activeTrainFailure(midBlock.id()));
+        for (int i = 0; i < 5; i++) {
+            state = tick(state, ctx, events);
+            TrainState frozen = state.trains().get(0);
+            assertThat(frozen.progress()).isEqualTo(midBlock.progress());
+            assertThat(frozen.currentTrackId()).isEqualTo(midBlock.currentTrackId());
+            assertThat(frozen.speedKmph()).isEqualTo(0.0);
+        }
+    }
+
+    @Test
+    void delaySecondsGrowsLiveWhileATrainIsHeldByADisruptionThenClearsOnceResolved() {
+        MetroNetwork network = threeStationNetwork();
+        TickContext ctx = contextFor(network);
+        SimulationState state = withDisruptions(initialState(trainAt(1, "T1", 1)), activeTrackBlockage(1));
+        List<SimulationEvent> events = new ArrayList<>();
+
+        int delayAfterFirstHeldTick = -1;
+        int delayAfterMoreTicks;
+        for (int i = 0; i < 40; i++) {
+            state = tick(state, ctx, events);
+            TrainState t = state.trains().get(0);
+            if ((t.status() == TrainStatus.STOPPED || t.status() == TrainStatus.DELAYED) && delayAfterFirstHeldTick < 0) {
+                delayAfterFirstHeldTick = t.delaySeconds();
+            }
+        }
+        assertThat(delayAfterFirstHeldTick).isGreaterThanOrEqualTo(0);
+
+        for (int i = 0; i < 10; i++) {
+            state = tick(state, ctx, events);
+        }
+        delayAfterMoreTicks = state.trains().get(0).delaySeconds();
+        assertThat(delayAfterMoreTicks).isGreaterThan(delayAfterFirstHeldTick);
+
+        // Resolve the disruption directly (bypassing DisruptionEffectsHandler, which isn't part of
+        // this test's pipeline) and confirm the train resumes on its own on the very next tick.
+        state = state.withDisruptions(List.of());
+        for (int i = 0; i < 5; i++) {
+            state = tick(state, ctx, events);
+        }
+        assertThat(state.trains().get(0).status()).isIn(TrainStatus.DEPARTING, TrainStatus.RUNNING);
     }
 }

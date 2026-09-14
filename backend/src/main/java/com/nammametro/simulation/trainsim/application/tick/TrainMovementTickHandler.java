@@ -443,11 +443,17 @@ public class TrainMovementTickHandler implements TickHandler {
             controllers.put(trackId, trainId);
         }
 
+        /** A train id can never be assigned this value (see {@code LineScheduleAssembler}, which
+         * always multiplies a positive schedule id) — used as the signal's controller for a track
+         * blocked by a disruption with no real train on it. */
+        private static final long NO_TRAIN_SENTINEL = -1L;
+
         /** Forces a track OCCUPIED for a disruption, but only if no real train already claimed it
          * this tick — preserves the real train's id as the signal's controller when one's present. */
         void blockIfFree(long trackId) {
             if (stateOf(trackId) == BlockState.FREE) {
                 states.put(trackId, BlockState.OCCUPIED);
+                controllers.put(trackId, NO_TRAIN_SENTINEL);
             }
         }
 

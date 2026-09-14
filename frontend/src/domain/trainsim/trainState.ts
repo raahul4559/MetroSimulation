@@ -30,6 +30,11 @@ export interface TrainState {
   readonly maxSpeedKmph: number;
   readonly accelerationMps2: number;
   readonly brakingRateMps2: number;
-  /** Seconds this train has been held past when it wanted to depart — 0 when running on time. */
+  /** Seconds behind the nominal schedule right now — 0 when on time, recomputed live every tick. */
   readonly delaySeconds: number;
+  /** Nominal-vs-actual timestamps (simulation-elapsed seconds) for this train's most recent leg —
+   * null until the corresponding event has happened at least once. */
+  readonly scheduledArrivalSeconds: number | null;
+  readonly actualArrivalSeconds: number | null;
+  readonly actualDepartureSeconds: number | null;
 }
