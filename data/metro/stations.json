@@ -1,0 +1,23 @@
+[
+  { "id": 1,  "code": "KENGERI",            "name": "Kengeri",                "latitude": 12.9081, "longitude": 77.4855 },
+  { "id": 2,  "code": "NAYANDAHALLI",       "name": "Nayandahalli",           "latitude": 12.9435, "longitude": 77.5348 },
+  { "id": 3,  "code": "VIJAYANAGAR",        "name": "Vijayanagar",            "latitude": 12.9719, "longitude": 77.5326 },
+  { "id": 4,  "code": "MAGADI_ROAD",        "name": "Magadi Road",            "latitude": 12.9767, "longitude": 77.5624 },
+  { "id": 5,  "code": "MAJESTIC",           "name": "Majestic (Kempegowda)",  "latitude": 12.9767, "longitude": 77.5713 },
+  { "id": 6,  "code": "MG_ROAD",            "name": "MG Road",                "latitude": 12.9758, "longitude": 77.6055 },
+  { "id": 7,  "code": "INDIRANAGAR",        "name": "Indiranagar",            "latitude": 12.9784, "longitude": 77.6408 },
+  { "id": 8,  "code": "BAIYAPPANAHALLI",    "name": "Baiyappanahalli",        "latitude": 12.9911, "longitude": 77.6530 },
+  { "id": 9,  "code": "WHITEFIELD",         "name": "Whitefield (Kadugodi)",  "latitude": 12.9899, "longitude": 77.7499 },
+  { "id": 10, "code": "NAGASANDRA",         "name": "Nagasandra",             "latitude": 13.0453, "longitude": 77.5115 },
+  { "id": 11, "code": "YESHWANTPUR",        "name": "Yeshwantpur",            "latitude": 13.0284, "longitude": 77.5546 },
+  { "id": 12, "code": "MAHALAKSHMI",        "name": "Mahalakshmi",            "latitude": 13.0119, "longitude": 77.5563 },
+  { "id": 13, "code": "LALBAGH",            "name": "Lalbagh",                "latitude": 12.9507, "longitude": 77.5848 },
+  { "id": 14, "code": "JAYANAGAR",          "name": "Jayanagar",              "latitude": 12.9308, "longitude": 77.5838 },
+  { "id": 15, "code": "RV_ROAD",            "name": "RV Road",                "latitude": 12.9421, "longitude": 77.5764 },
+  { "id": 16, "code": "YELACHENAHALLI",     "name": "Yelachenahalli",         "latitude": 12.8887, "longitude": 77.5722 },
+  { "id": 17, "code": "JAYADEVA_HOSPITAL",  "name": "Jayadeva Hospital",      "latitude": 12.9186, "longitude": 77.5988 },
+  { "id": 18, "code": "CENTRAL_SILK_BOARD", "name": "Central Silk Board",     "latitude": 12.9172, "longitude": 77.6228 },
+  { "id": 19, "code": "ELECTRONIC_CITY",    "name": "Electronic City",        "latitude": 12.8452, "longitude": 77.6602 },
+  { "id": 20, "code": "HEBBAGODI",          "name": "Hebbagodi",              "latitude": 12.8112, "longitude": 77.6774 },
+  { "id": 21, "code": "BOMMASANDRA",        "name": "Bommasandra",            "latitude": 12.8006, "longitude": 77.6910 }
+]

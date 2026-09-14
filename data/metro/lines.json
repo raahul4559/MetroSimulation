@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "code": "PURPLE",
+    "name": "Purple Line",
+    "color": "#92278F",
+    "stationCodes": [
+      "KENGERI", "NAYANDAHALLI", "VIJAYANAGAR", "MAGADI_ROAD", "MAJESTIC",
+      "MG_ROAD", "INDIRANAGAR", "BAIYAPPANAHALLI", "WHITEFIELD"
+    ]
+  },
+  {
+    "id": 2,
+    "code": "GREEN",
+    "name": "Green Line",
+    "color": "#00A651",
+    "stationCodes": [
+      "NAGASANDRA", "YESHWANTPUR", "MAHALAKSHMI", "MAJESTIC",
+      "LALBAGH", "JAYANAGAR", "RV_ROAD", "YELACHENAHALLI"
+    ]
+  },
+  {
+    "id": 3,
+    "code": "YELLOW",
+    "name": "Yellow Line",
+    "color": "#FDB913",
+    "stationCodes": [
+      "RV_ROAD", "JAYADEVA_HOSPITAL", "CENTRAL_SILK_BOARD",
+      "ELECTRONIC_CITY", "HEBBAGODI", "BOMMASANDRA"
+    ]
+  }
+]

@@ -1,0 +1,24 @@
+[
+  { "id": 1,  "lineCode": "PURPLE", "fromStationCode": "KENGERI",            "toStationCode": "NAYANDAHALLI",       "distanceMetres": 5400,  "expectedTravelTimeSeconds": 572 },
+  { "id": 2,  "lineCode": "PURPLE", "fromStationCode": "NAYANDAHALLI",       "toStationCode": "VIJAYANAGAR",        "distanceMetres": 2700,  "expectedTravelTimeSeconds": 286 },
+  { "id": 3,  "lineCode": "PURPLE", "fromStationCode": "VIJAYANAGAR",        "toStationCode": "MAGADI_ROAD",        "distanceMetres": 2700,  "expectedTravelTimeSeconds": 286 },
+  { "id": 4,  "lineCode": "PURPLE", "fromStationCode": "MAGADI_ROAD",        "toStationCode": "MAJESTIC",           "distanceMetres": 1800,  "expectedTravelTimeSeconds": 191 },
+  { "id": 5,  "lineCode": "PURPLE", "fromStationCode": "MAJESTIC",           "toStationCode": "MG_ROAD",            "distanceMetres": 3600,  "expectedTravelTimeSeconds": 381 },
+  { "id": 6,  "lineCode": "PURPLE", "fromStationCode": "MG_ROAD",            "toStationCode": "INDIRANAGAR",        "distanceMetres": 4500,  "expectedTravelTimeSeconds": 477 },
+  { "id": 7,  "lineCode": "PURPLE", "fromStationCode": "INDIRANAGAR",        "toStationCode": "BAIYAPPANAHALLI",    "distanceMetres": 2700,  "expectedTravelTimeSeconds": 286 },
+  { "id": 8,  "lineCode": "PURPLE", "fromStationCode": "BAIYAPPANAHALLI",    "toStationCode": "WHITEFIELD",         "distanceMetres": 14000, "expectedTravelTimeSeconds": 1483 },
+
+  { "id": 9,  "lineCode": "GREEN",  "fromStationCode": "NAGASANDRA",         "toStationCode": "YESHWANTPUR",        "distanceMetres": 5200,  "expectedTravelTimeSeconds": 551 },
+  { "id": 10, "lineCode": "GREEN",  "fromStationCode": "YESHWANTPUR",        "toStationCode": "MAHALAKSHMI",        "distanceMetres": 2200,  "expectedTravelTimeSeconds": 233 },
+  { "id": 11, "lineCode": "GREEN",  "fromStationCode": "MAHALAKSHMI",        "toStationCode": "MAJESTIC",           "distanceMetres": 3500,  "expectedTravelTimeSeconds": 371 },
+  { "id": 12, "lineCode": "GREEN",  "fromStationCode": "MAJESTIC",           "toStationCode": "LALBAGH",            "distanceMetres": 3700,  "expectedTravelTimeSeconds": 392 },
+  { "id": 13, "lineCode": "GREEN",  "fromStationCode": "LALBAGH",            "toStationCode": "JAYANAGAR",          "distanceMetres": 2700,  "expectedTravelTimeSeconds": 286 },
+  { "id": 14, "lineCode": "GREEN",  "fromStationCode": "JAYANAGAR",          "toStationCode": "RV_ROAD",            "distanceMetres": 1800,  "expectedTravelTimeSeconds": 191 },
+  { "id": 15, "lineCode": "GREEN",  "fromStationCode": "RV_ROAD",            "toStationCode": "YELACHENAHALLI",     "distanceMetres": 5700,  "expectedTravelTimeSeconds": 604 },
+
+  { "id": 16, "lineCode": "YELLOW", "fromStationCode": "RV_ROAD",            "toStationCode": "JAYADEVA_HOSPITAL",  "distanceMetres": 3100,  "expectedTravelTimeSeconds": 328 },
+  { "id": 17, "lineCode": "YELLOW", "fromStationCode": "JAYADEVA_HOSPITAL",  "toStationCode": "CENTRAL_SILK_BOARD", "distanceMetres": 2800,  "expectedTravelTimeSeconds": 297 },
+  { "id": 18, "lineCode": "YELLOW", "fromStationCode": "CENTRAL_SILK_BOARD", "toStationCode": "ELECTRONIC_CITY",    "distanceMetres": 9300,  "expectedTravelTimeSeconds": 985 },
+  { "id": 19, "lineCode": "YELLOW", "fromStationCode": "ELECTRONIC_CITY",    "toStationCode": "HEBBAGODI",          "distanceMetres": 4600,  "expectedTravelTimeSeconds": 487 },
+  { "id": 20, "lineCode": "YELLOW", "fromStationCode": "HEBBAGODI",          "toStationCode": "BOMMASANDRA",        "distanceMetres": 2300,  "expectedTravelTimeSeconds": 244 }
+]

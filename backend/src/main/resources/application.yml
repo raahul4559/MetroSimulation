@@ -1,0 +1,33 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: metro-simulation
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/metro_simulation}
+    username: ${DB_USERNAME:metro_user}
+    password: ${DB_PASSWORD:metro_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+simulation:
+  tick-interval-ms: ${SIMULATION_TICK_INTERVAL_MS:1000}
+  time-scale: ${SIMULATION_TIME_SCALE:1.0}
