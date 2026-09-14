@@ -4,12 +4,14 @@ import { playChime, playRumble, startAmbienceLoop } from "./synth";
 const STORAGE_KEY = "metrosim.audioSettings";
 
 /**
- * The one audio surface for the whole 3D station feature — door chimes, train rumble, the ambient
- * bed, and spoken announcements, plus the mute/volume/announcements/ambience settings a listener
- * (the station's audio control cluster) can read and change. A module-level singleton, not a React
- * context: `AudioContext`s are a scarce, browser-capped resource, and this needs to survive
- * `StationScene` mounting/unmounting as the operator moves between stations rather than tearing one
- * down and spinning up another each time.
+ * The audio surface for the 3D station feature's *non-speech* sound — door chimes, train rumble, the
+ * ambient bed — plus the mute/volume/announcements/ambience/language settings a listener (the
+ * station's audio control cluster, `AnnouncementService`) can read and change. Spoken announcements
+ * themselves are a separate concern: see `lib/audio/VoiceProvider.ts` (the actual speech engine) and
+ * `lib/announcements/AnnouncementService.ts` (the orchestrator), which read this manager's settings
+ * but own their own playback. A module-level singleton, not a React context: `AudioContext`s are a
+ * scarce, browser-capped resource, and this needs to survive `StationScene` mounting/unmounting as
+ * the operator moves between stations rather than tearing one down and spinning up another each time.
  *
  * <p>Every real sound is either a real asset (checked once per path, then cached — see
  * {@link loadBuffer}) under {@code public/audio/<category>/<name>}, or, absent one, a small
@@ -79,24 +81,13 @@ class AudioManagerImpl {
     );
   }
 
-  /** Speaks an announcement via the browser's speech synthesis — clearly a synthesized voice, never
-   * presented as a real recording (see `public/audio/announcements/README.md`). No-ops quietly if
-   * the browser has no speech synthesis support, muted, or announcements are turned off. */
-  speak(text: string): void {
-    if (!text || this.settings.muted || !this.settings.announcementsEnabled) return;
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.volume = this.settings.volume;
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
-
   /** Called when a station scene unmounts. Deliberately does not close the shared `AudioContext` —
    * the operator is likely about to open another station, and browsers cap how many contexts can
-   * exist at once, so the context is kept and reused rather than torn down and recreated. */
+   * exist at once, so the context is kept and reused rather than torn down and recreated. Spoken
+   * announcements are a separate concern owned by `AnnouncementService`/`VoiceProvider` — callers
+   * stop those themselves (see `StationScene`'s unmount effect) rather than this reaching into them. */
   leaveScene(): void {
     this.stopAmbience();
-    if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
   }
 
   private applyVolume(): void {

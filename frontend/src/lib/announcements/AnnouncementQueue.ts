@@ -30,7 +30,6 @@ export type TextForFn = (event: AnnouncementEvent, language: LanguageCode) => st
 export class AnnouncementQueue {
   private readonly jobs: QueueJob[] = [];
   private draining = false;
-  private currentEvent: AnnouncementEvent | null = null;
 
   constructor(
     private readonly speak: SpeakFn,
@@ -73,27 +72,25 @@ export class AnnouncementQueue {
         const job = this.jobs.shift();
         if (!job) break;
         if (!this.isEnabled()) continue;
-        this.currentEvent = job.event;
         await this.playJob(job);
-        this.currentEvent = null;
         if (this.jobs.length > 0) await delay(INTER_EVENT_PAUSE_MS);
       }
     } finally {
       this.draining = false;
-      this.currentEvent = null;
       this.onCaption(null);
     }
   }
 
   private async playJob(job: QueueJob): Promise<void> {
-    for (let i = 0; i < job.languages.length; i++) {
+    const languages = job.languages;
+    for (let i = 0; i < languages.length; i++) {
       if (!this.isEnabled()) return;
-      const language = job.languages[i];
+      const language: LanguageCode = languages[i]!;
       const text = this.textFor(job.event, language);
       if (!text) continue;
       this.onCaption({ text, language, event: job.event });
       await this.speak(text, language, job.event);
-      if (i < job.languages.length - 1) await delay(INTER_LANGUAGE_PAUSE_MS);
+      if (i < languages.length - 1) await delay(INTER_LANGUAGE_PAUSE_MS);
     }
   }
 }

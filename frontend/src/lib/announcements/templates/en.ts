@@ -40,6 +40,7 @@ export function buildEnglishText(type: AnnouncementType, d: ResolvedAnnouncement
 
 function joinNatural(items: readonly string[] | null): string {
   if (!items || items.length === 0) return "other lines";
-  if (items.length === 1) return items[0];
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+  if (items.length === 1) return items[0]!;
+  const last = items[items.length - 1]!;
+  return `${items.slice(0, -1).join(", ")} and ${last}`;
 }

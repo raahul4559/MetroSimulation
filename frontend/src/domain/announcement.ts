@@ -112,7 +112,9 @@ export interface AnnouncementEvent {
   readonly id: string;
   readonly type: AnnouncementType;
   readonly priority: AnnouncementPriority;
-  readonly trainId: number;
+  /** `null` for station-wide events not tied to any one train (currently only `SERVICE_DISRUPTION`
+   * for a station-level disruption). */
+  readonly trainId: number | null;
   readonly data: AnnouncementData;
 }
 

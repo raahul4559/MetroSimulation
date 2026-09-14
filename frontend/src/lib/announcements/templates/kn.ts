@@ -41,6 +41,7 @@ export function buildKannadaText(type: AnnouncementType, d: ResolvedAnnouncement
 
 function joinNatural(items: readonly string[] | null): string {
   if (!items || items.length === 0) return "ಇತರ ಮಾರ್ಗಗಳಿಗೆ";
-  if (items.length === 1) return items[0];
-  return `${items.slice(0, -1).join(", ")} ಮತ್ತು ${items[items.length - 1]}`;
+  if (items.length === 1) return items[0]!;
+  const last = items[items.length - 1]!;
+  return `${items.slice(0, -1).join(", ")} ಮತ್ತು ${last}`;
 }

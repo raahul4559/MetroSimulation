@@ -104,6 +104,7 @@ export default function DashboardPage() {
                   stations={stations}
                   trains={trains}
                   passengers={passengers}
+                  disruptions={disruptions}
                   clock={clock}
                   onBack={() => setStationView3DId(null)}
                 />

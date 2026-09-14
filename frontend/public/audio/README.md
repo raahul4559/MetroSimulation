@@ -16,8 +16,20 @@ them, and never label a synthesized file as an authentic recording.
 | `doors/close.mp3` | Door-closing chime |
 | `trains/rumble.mp3` | Train approach/departure movement sound |
 | `ambience/` | Reserved for a future station ambience loop (currently always synthesized) |
-| `announcements/` | Reserved for pre-recorded announcement clips (currently always synthesized speech via the browser's Speech Synthesis API) |
+| `announcements/` | Reserved for pre-recorded announcement clips — currently always synthesized speech via the browser's Speech Synthesis API, see below |
 
 Adding a file at one of the `doors`/`trains` paths above is picked up automatically — no
 code change needed, `AudioManager` fetches it once, caches the decoded buffer, and prefers
 it over the synthesized fallback.
+
+## Spoken announcements
+
+Spoken PA announcements are a separate pipeline from the rest of this tree — they don't read
+from `announcements/` today. `frontend/src/lib/audio/VoiceProvider.ts` speaks text through the
+browser's own Speech Synthesis API, picking one Indian-accented voice per language (English,
+Hindi, Kannada — see `LanguageCode`) and reusing it consistently rather than re-picking at
+random. `frontend/src/lib/announcements/AnnouncementService.ts` is what builds that text, from
+natural per-language templates (`lib/announcements/templates/`) and real network data — never a
+literal runtime translation of English. To swap in a hosted/licensed TTS engine later, implement
+the `VoiceProvider` interface and swap the module's export; nothing else in the announcement
+pipeline needs to change.

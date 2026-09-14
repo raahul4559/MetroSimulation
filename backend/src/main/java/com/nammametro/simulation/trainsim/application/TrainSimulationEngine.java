@@ -173,7 +173,15 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase, Dis
             allEvents.addAll(stepResult.events());
         }
 
-        state.set(result);
+        // compareAndSet, not a plain set(): an HTTP thread's start/pause/stop/setSpeed/
+        // createDisruption/cancelDisruption call (each its own updateAndGet against `state`) can
+        // land between the `state.get()` above and here. A plain set(result) would silently discard
+        // that concurrent update since `result` was computed from the pre-update `current`. If the
+        // CAS fails, `result` (computed from now-stale `current`) is simply not applied — the
+        // concurrent update wins and this tick's advance is picked up on the next scheduled run.
+        if (!state.compareAndSet(current, result)) {
+            return;
+        }
         analyticsRecorder.record(result);
         eventPublisher.publishState(result);
         if (!allEvents.isEmpty()) {

@@ -3,9 +3,10 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import type { Line, Station } from "@/domain/metro";
-import type { Passenger, SimulationClock, TrainState } from "@/domain/trainsim";
+import type { Disruption, Passenger, SimulationClock, TrainState } from "@/domain/trainsim";
 import type { CameraMode3D } from "@/domain/station3d";
 import type { StationModelQuality } from "@/domain/stationConfig";
+import { LANGUAGE_LABELS, LANGUAGE_MODE_PRESETS, type LanguageMode } from "@/domain/announcement";
 import { buildStationLayout3D } from "@/lib/station3d/layout";
 import { findUpcomingTrainCode, selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
 import { formatDurationSeconds, formatOccupancyPercent } from "@/lib/metro/passengerDisplay";
@@ -18,6 +19,7 @@ import { useStationAsset } from "@/hooks/useStationAsset";
 import { useStationAnnouncements } from "@/hooks/useStationAnnouncements";
 import { useAudioSettings } from "@/hooks/useAudioSettings";
 import { audioManager } from "@/lib/audio/AudioManager";
+import { announcementService, type AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
 
 interface StationSceneProps {
   station: Station;
@@ -25,6 +27,7 @@ interface StationSceneProps {
   stations: readonly Station[];
   trains: readonly TrainState[];
   passengers: readonly Passenger[];
+  disruptions?: readonly Disruption[];
   clock: SimulationClock;
   onBack: () => void;
 }
@@ -36,18 +39,19 @@ const CAMERA_MODES: readonly { mode: CameraMode3D; label: string }[] = [
   { mode: "FREE", label: "Free Camera" },
 ];
 
-const CAPTION_VISIBLE_MS = 4500;
-
 /**
  * The 3D station view's top-level component: builds the station's procedural layout and resolves
  * which real trains are currently visible there, owns camera-mode/selection/audio UI state, and
  * renders the WebGL canvas plus its HTML overlay. Everything it feeds into the scene comes from the
  * same `SimulationState` the 2D map reads (`trains`, `passengers`, `clock`) and the same network
  * data (`lines`/`stations`) — this component runs no simulation of its own. Announcements
- * (`useStationAnnouncements`) and audio (`audioManager`) are likewise both driven purely by the real
- * `TrainVisual3D` phase transitions computed here, never invented independently.
+ * (`useStationAnnouncements` deriving events, `AnnouncementService` speaking them) and non-speech
+ * audio (`audioManager`) are likewise both driven purely by the real `TrainVisual3D`
+ * phase/disruption transitions computed here, never invented independently. This component only
+ * ever hands a real `AnnouncementEvent` to `AnnouncementService` — it never builds announcement text
+ * or picks a voice itself, that logic lives entirely outside the 3D scene.
  */
-export function StationScene({ station, lines, stations, trains, passengers, clock, onBack }: StationSceneProps) {
+export function StationScene({ station, lines, stations, trains, passengers, disruptions = [], clock, onBack }: StationSceneProps) {
   const stationsById = useMemo(() => new Map(stations.map((s) => [s.id, s] as const)), [stations]);
   const lineByCode = useMemo(() => new Map(lines.map((l) => [l.code, l] as const)), [lines]);
   const layout = useMemo(() => buildStationLayout3D(station, lines, stationsById), [station, lines, stationsById]);
@@ -66,34 +70,45 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
   const [cameraMode, setCameraMode] = useState<CameraMode3D>("OVERVIEW");
   const [resetToken, setResetToken] = useState(0);
   const [selectedTrainId, setSelectedTrainId] = useState<number | null>(null);
-  const [caption, setCaption] = useState<string | null>(null);
+  const [caption, setCaption] = useState<AnnouncementCaption | null>(null);
   const [audioPanelOpen, setAudioPanelOpen] = useState(false);
   const [audioSettings, updateAudioSettings] = useAudioSettings();
 
-  const { latest: latestAnnouncement, consume: consumeAnnouncement } = useStationAnnouncements(layout, trainVisuals);
+  const { latest: latestAnnouncement, consume: consumeAnnouncement } = useStationAnnouncements(
+    layout,
+    trainVisuals,
+    disruptions
+  );
 
-  // Every announcement this station fires plays through the same two channels — speech + the
-  // matching discrete sound effect — and shows as a caption, all off the one real event, then is
-  // consumed exactly once so it never replays on an unrelated re-render.
+  // Every real announcement event this station fires is handed to `AnnouncementService` (which
+  // resolves the operator's configured language(s), builds the natural per-language text, and
+  // speaks them in sequence — none of that logic lives here) plus whichever discrete non-speech
+  // sound effect matches it, then consumed exactly once so it never replays on an unrelated
+  // re-render.
   useEffect(() => {
     if (!latestAnnouncement) return;
-    const message = latestAnnouncement.message;
-    audioManager.speak(message);
+    announcementService.announce(latestAnnouncement);
     if (latestAnnouncement.type === "DOORS_OPENING") audioManager.playDoorChime("open");
     if (latestAnnouncement.type === "DOORS_CLOSING") audioManager.playDoorChime("close");
     if (latestAnnouncement.type === "TRAIN_APPROACHING") audioManager.playTrainRumble(0.4, 2);
     if (latestAnnouncement.type === "TRAIN_DEPARTING") audioManager.playTrainRumble(0.5, 2.5);
     consumeAnnouncement();
-    // Deferred a microtask so these setState calls are async, not synchronous within the effect
-    // body (avoids react-hooks/set-state-in-effect) — same pattern as the station-switch effect below.
-    Promise.resolve().then(() => setCaption(message || null));
-    const timeout = window.setTimeout(() => setCaption((current) => (current === message ? null : current)), CAPTION_VISIBLE_MS);
-    return () => window.clearTimeout(timeout);
   }, [latestAnnouncement, consumeAnnouncement]);
 
+  // The caption always mirrors exactly what's audibly playing right now (including which language),
+  // not a fixed English string — `AnnouncementService` clears it itself the moment playback stops.
+  useEffect(() => announcementService.subscribeCaption(setCaption), []);
+
   // Ambience/door/rumble sounds live on a module-level singleton so they survive this component
-  // remounting on the next station — only stop the ambience loop and any in-flight speech here.
-  useEffect(() => () => audioManager.leaveScene(), []);
+  // remounting on the next station — only stop the ambience loop, and any in-flight/queued
+  // announcements, here.
+  useEffect(
+    () => () => {
+      audioManager.leaveScene();
+      announcementService.stopAll();
+    },
+    []
+  );
 
   // A train that leaves this station's visible window (boarded away, or the phase resolver drops
   // it) should stop being "selected" rather than silently keep a dangling id around. Deferred a
@@ -246,6 +261,23 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
                     onChange={(e) => updateAudioSettings({ ambienceEnabled: e.target.checked })}
                   />
                 </label>
+                <label className="block space-y-1">
+                  <span>Announcement language</span>
+                  <select
+                    value={languageModePresetId(audioSettings.languageMode)}
+                    onChange={(e) => {
+                      const preset = LANGUAGE_MODE_PRESETS.find((p) => p.id === e.target.value);
+                      if (preset) updateAudioSettings({ languageMode: preset.languages });
+                    }}
+                    className="w-full rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-xs text-slate-100"
+                  >
+                    {LANGUAGE_MODE_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
             )}
           </div>
@@ -263,7 +295,10 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
       {caption && (
         <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center px-4">
           <div className="max-w-xl rounded-md bg-slate-900/85 px-3 py-1.5 text-center text-xs text-slate-100 shadow-lg backdrop-blur">
-            {caption}
+            <span className="mr-1.5 rounded bg-slate-700/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-300">
+              {LANGUAGE_LABELS[caption.language]}
+            </span>
+            {caption.text}
           </div>
         </div>
       )}
@@ -313,6 +348,15 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
       </div>
     </div>
   );
+}
+
+/** Which preset the operator's current `languageMode` matches, for the `<select>`'s value — settings
+ * are only ever written from a preset (see the `onChange` above), so this always finds one in
+ * practice; falls back to the first preset (English) if a stored value somehow doesn't match. */
+function languageModePresetId(languages: LanguageMode): string {
+  const key = languages.join(",");
+  const match = LANGUAGE_MODE_PRESETS.find((preset) => preset.languages.join(",") === key);
+  return match?.id ?? LANGUAGE_MODE_PRESETS[0]!.id;
 }
 
 function qualityLabel(quality: StationModelQuality): string {
