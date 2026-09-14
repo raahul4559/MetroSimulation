@@ -1,30 +1,58 @@
 import type { Station } from "@/domain/metro";
-import type { Projector } from "@/lib/geometry/projection";
+import type { Point } from "@/lib/geometry/projection";
 
-export function StationMarker({ station, project }: { station: Station; project: Projector }) {
-  const { x, y } = project(station);
+interface StationMarkerProps {
+  station: Station;
+  point: Point;
+  scale: number;
+  selected: boolean;
+  onSelect: (station: Station) => void;
+}
+
+/**
+ * A station node. Wrapped in its own `translate → scale(1/zoom)` group so the marker stays a
+ * constant on-screen size at any map zoom level, independent of the shared pan/zoom transform
+ * applied to the map as a whole.
+ */
+export function StationMarker({ station, point, scale, selected, onSelect }: StationMarkerProps) {
   const isInterchange = station.stationType === "INTERCHANGE";
+  const isTerminal = station.stationType === "TERMINAL";
 
   return (
-    <g>
+    <g
+      transform={`translate(${point.x} ${point.y}) scale(${1 / scale})`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${station.name} station`}
+      className="cursor-pointer outline-none"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect(station);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(station);
+        }
+      }}
+    >
+      {selected && (
+        <circle r={isInterchange ? 12 : 9} fill="none" stroke="#38bdf8" strokeWidth={2} />
+      )}
       {isInterchange ? (
         <>
-          <circle cx={x} cy={y} r={7} fill="#0f172a" stroke="#f1f5f9" strokeWidth={2} />
-          <circle cx={x} cy={y} r={3} fill="#f1f5f9" />
+          <circle r={7} fill="#0f172a" stroke="#f1f5f9" strokeWidth={2} />
+          <circle r={3} fill="#f1f5f9" />
         </>
       ) : (
-        <circle cx={x} cy={y} r={4} fill="#0f172a" stroke="#f1f5f9" strokeWidth={1.5} />
+        <circle
+          r={isTerminal ? 5 : 4}
+          fill="#0f172a"
+          stroke="#f1f5f9"
+          strokeWidth={isTerminal ? 2 : 1.5}
+        />
       )}
-      <text
-        x={x}
-        y={y - 10}
-        textAnchor="middle"
-        fontSize={9}
-        fill="#cbd5e1"
-        className="select-none"
-      >
-        {station.name}
-      </text>
     </g>
   );
 }

@@ -3,7 +3,6 @@
 import { useNetwork } from "@/hooks/useNetwork";
 import { useSimulationState } from "@/hooks/useSimulationState";
 import { MetroMap } from "@/components/map/MetroMap";
-import { MapLegend } from "@/components/map/MapLegend";
 import { Panel } from "@/components/ui/Panel";
 import { ConnectionIndicator } from "@/components/ui/ConnectionIndicator";
 import { SimulationClockDisplay } from "@/components/controls/SimulationClockDisplay";
@@ -12,7 +11,7 @@ import { LineList } from "@/components/network/LineList";
 import { StationDetailPanel } from "@/components/network/StationDetailPanel";
 
 export default function DashboardPage() {
-  const { lines, stations, interchanges, isLoading, error: networkError } = useNetwork();
+  const { lines, stations, tracks, interchanges, isLoading, error: networkError } = useNetwork();
   const {
     simulation,
     connectionStatus,
@@ -33,13 +32,18 @@ export default function DashboardPage() {
         <ConnectionIndicator status={connectionStatus} />
       </header>
 
-      <main className="grid flex-1 grid-cols-1 gap-4 p-6 lg:grid-cols-[1fr_320px]">
-        <Panel title="Network map" action={<MapLegend lines={lines} />}>
+      <main className="grid flex-1 grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr_300px]">
+        <Panel title="Network map">
           {isLoading && <p className="text-sm text-slate-500">Loading network…</p>}
           {networkError && <p className="text-sm text-red-400">{networkError}</p>}
           {!isLoading && !networkError && (
-            <div className="aspect-[4/3] w-full">
-              <MetroMap lines={lines} stations={stations} />
+            <div className="h-[65vh] min-h-[420px] w-full lg:h-[calc(100vh-160px)]">
+              <MetroMap
+                lines={lines}
+                stations={stations}
+                tracks={tracks}
+                connectionStatus={connectionStatus}
+              />
             </div>
           )}
         </Panel>
