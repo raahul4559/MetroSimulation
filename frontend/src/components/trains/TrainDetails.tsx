@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
 import type { Signal, TrainState } from "@/domain/trainsim";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { OccupancyBar } from "@/components/ui/OccupancyBar";
 import { TRAIN_STATUS_LABEL, TRAIN_STATUS_TONE, describeTrainLocation } from "@/lib/metro/trainDisplay";
 import { computeBlockChain } from "@/lib/metro/blockChain";
 
@@ -59,10 +60,14 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
 
       <p className="text-xs text-slate-300">{describeTrainLocation(train, stationsById)}</p>
 
+      <div>
+        <p className="mb-1 text-xs text-slate-500">Occupancy</p>
+        <OccupancyBar count={train.passengerCount} capacity={train.capacity} />
+      </div>
+
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <Field label="Direction" value={train.direction === "OUTBOUND" ? "Outbound" : "Inbound"} />
         <Field label="Speed" value={`${Math.round(train.speedKmph)} km/h`} />
-        <Field label="Passengers" value={`${train.passengerCount} / ${train.capacity}`} />
         <Field label="Delay" value={train.delaySeconds > 0 ? `+${train.delaySeconds}s` : "On time"} />
         <Field label="Max speed" value={`${train.maxSpeedKmph} km/h`} />
         <Field label="Dwell time" value={`${train.dwellTimeSeconds}s`} />

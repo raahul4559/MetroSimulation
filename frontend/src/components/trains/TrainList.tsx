@@ -2,6 +2,7 @@ import type { Line } from "@/domain/metro";
 import type { TrainState } from "@/domain/trainsim";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TRAIN_STATUS_LABEL, TRAIN_STATUS_TONE } from "@/lib/metro/trainDisplay";
+import { formatOccupancyPercent } from "@/lib/metro/passengerDisplay";
 
 interface TrainListProps {
   trains: readonly TrainState[];
@@ -46,8 +47,8 @@ export function TrainList({ trains, lines, hiddenLineCodes, selectedTrainId, onS
                 {train.direction === "OUTBOUND" ? "→" : "←"}
               </span>
               <StatusBadge label={TRAIN_STATUS_LABEL[train.status]} tone={TRAIN_STATUS_TONE[train.status]} />
-              <span className="ml-auto shrink-0 text-slate-500">
-                {train.status === "RUNNING" ? `${Math.round(train.speedKmph)} km/h` : ""}
+              <span className="ml-auto shrink-0 font-mono text-slate-500">
+                {formatOccupancyPercent(train.passengerCount, train.capacity)}
               </span>
               {train.delaySeconds > 0 && (
                 <span className="shrink-0 text-amber-400">+{train.delaySeconds}s</span>
