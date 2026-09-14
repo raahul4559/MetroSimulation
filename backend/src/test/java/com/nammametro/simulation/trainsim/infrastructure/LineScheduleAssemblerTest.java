@@ -37,7 +37,7 @@ class LineScheduleAssemblerTest {
 
     private static SimulationConfigRepository fixedConfig() {
         SimulationConfig config = new SimulationConfig(1L, "Test", 1000, 1.0, 30, 120, true,
-                Instant.parse("2026-01-01T05:00:00Z"), 5, 60, 42L);
+                Instant.parse("2026-01-01T05:00:00Z"), 5, 60, 42L, "AUTO", 1.0);
         return () -> Optional.of(config);
     }
 

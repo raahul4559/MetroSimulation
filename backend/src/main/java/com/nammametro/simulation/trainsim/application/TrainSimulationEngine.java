@@ -3,6 +3,8 @@ package com.nammametro.simulation.trainsim.application;
 import com.nammametro.simulation.domain.model.SimulationStatus;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.application.tick.ClockAdvanceHandler;
+import com.nammametro.simulation.trainsim.application.tick.PassengerBoardingHandler;
+import com.nammametro.simulation.trainsim.application.tick.PassengerDemandGenerationHandler;
 import com.nammametro.simulation.trainsim.application.tick.TrainDispatcher;
 import com.nammametro.simulation.trainsim.application.tick.TrainMovementTickHandler;
 import com.nammametro.simulation.trainsim.domain.BlockSafetyValidator;
@@ -24,9 +26,11 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * The discrete-time simulation engine. Holds the current {@link SimulationState} in an
  * {@link AtomicReference} and advances it once per {@code @Scheduled} tick by running a fixed,
- * explicitly-ordered pipeline — clock, then dispatch, then train movement — never Spring's
- * implicit bean ordering, so the pipeline order is a decision made in code, not an accident of
- * component scanning.
+ * explicitly-ordered pipeline — clock, then dispatch, then passenger demand generation, then
+ * passenger boarding/alighting, then train movement — never Spring's implicit bean ordering, so
+ * the pipeline order is a decision made in code, not an accident of component scanning. Passenger
+ * boarding runs before train movement so it always sees a just-arrived train still
+ * {@code AT_STATION}, one tick before that status advances to {@code DWELLING}.
  *
  * <p>Deterministic by construction: every input (network topology, engine settings, initial train
  * roster, random seed) is read once at construction/reset and never mutated by the tick loop
@@ -43,7 +47,8 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
     private final LineScheduleAssembler assembler;
     private final TrainSimulationEventPublisher eventPublisher;
     private final List<TickHandler> pipeline =
-            List.of(new ClockAdvanceHandler(), new TrainDispatcher(), new TrainMovementTickHandler());
+            List.of(new ClockAdvanceHandler(), new TrainDispatcher(), new PassengerDemandGenerationHandler(),
+                    new PassengerBoardingHandler(), new TrainMovementTickHandler());
 
     private final AtomicReference<SimulationState> state;
     private final AtomicReference<LineScheduleAssembler.Assembled> assembled;

@@ -18,6 +18,8 @@ public record SimulationConfig(
         Instant startTime,
         int baseSimSecondsPerTick,
         int delayThresholdSeconds,
-        long randomSeed
+        long randomSeed,
+        String demandProfileMode,
+        double demandMultiplier
 ) {
 }

@@ -42,6 +42,12 @@ public class SimulationConfigJpaEntity {
     @Column(name = "random_seed", nullable = false)
     private long randomSeed;
 
+    @Column(name = "demand_profile_mode", nullable = false)
+    private String demandProfileMode;
+
+    @Column(name = "demand_multiplier", nullable = false)
+    private double demandMultiplier;
+
     protected SimulationConfigJpaEntity() {
         // JPA
     }
@@ -88,5 +94,13 @@ public class SimulationConfigJpaEntity {
 
     public long getRandomSeed() {
         return randomSeed;
+    }
+
+    public String getDemandProfileMode() {
+        return demandProfileMode;
+    }
+
+    public double getDemandMultiplier() {
+        return demandMultiplier;
     }
 }

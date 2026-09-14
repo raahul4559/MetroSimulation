@@ -12,6 +12,7 @@ import com.nammametro.simulation.trainsim.application.TickContext;
 import com.nammametro.simulation.trainsim.application.TickResult;
 import com.nammametro.simulation.trainsim.domain.model.EngineSettings;
 import com.nammametro.simulation.trainsim.domain.model.EventType;
+import com.nammametro.simulation.trainsim.domain.model.PassengerMetrics;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
@@ -56,7 +57,8 @@ class TrainDispatcherTest {
         TickContext ctx = contextFor(network);
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
-        SimulationState state = new SimulationState(clock, List.of(scheduledTrainAt(1, "T1", 1, 12)), List.of());
+        SimulationState state = new SimulationState(clock, List.of(scheduledTrainAt(1, "T1", 1, 12)), List.of(),
+                List.of(), PassengerMetrics.empty());
 
         // Ticks 1 and 2 (elapsed 5s, 10s): still before the scheduled 12s departure.
         for (int i = 0; i < 2; i++) {

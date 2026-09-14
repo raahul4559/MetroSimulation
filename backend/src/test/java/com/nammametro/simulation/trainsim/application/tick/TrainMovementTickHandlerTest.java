@@ -16,6 +16,7 @@ import com.nammametro.simulation.trainsim.domain.model.EventType;
 import com.nammametro.simulation.trainsim.domain.model.Signal;
 import com.nammametro.simulation.trainsim.domain.model.SignalAspect;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
+import com.nammametro.simulation.trainsim.domain.model.PassengerMetrics;
 import com.nammametro.simulation.trainsim.domain.model.SimulationEvent;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
@@ -66,7 +67,7 @@ class TrainMovementTickHandlerTest {
     private static SimulationState initialState(TrainState... trains) {
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
-        return new SimulationState(clock, List.of(trains), List.of());
+        return new SimulationState(clock, List.of(trains), List.of(), List.of(), PassengerMetrics.empty());
     }
 
     private static TickContext contextFor(MetroNetwork network) {

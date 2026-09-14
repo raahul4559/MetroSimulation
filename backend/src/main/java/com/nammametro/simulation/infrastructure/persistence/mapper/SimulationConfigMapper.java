@@ -20,7 +20,9 @@ public final class SimulationConfigMapper {
                 entity.getStartTime(),
                 entity.getBaseSimSecondsPerTick(),
                 entity.getDelayThresholdSeconds(),
-                entity.getRandomSeed()
+                entity.getRandomSeed(),
+                entity.getDemandProfileMode(),
+                entity.getDemandMultiplier()
         );
     }
 }

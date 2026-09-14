@@ -10,7 +10,9 @@ import com.nammametro.simulation.domain.model.TrainDirection;
 import com.nammametro.simulation.metro.domain.model.Line;
 import com.nammametro.simulation.metro.domain.model.Station;
 import com.nammametro.simulation.metro.network.MetroNetwork;
+import com.nammametro.simulation.trainsim.domain.model.DemandProfile;
 import com.nammametro.simulation.trainsim.domain.model.EngineSettings;
+import com.nammametro.simulation.trainsim.domain.model.PassengerMetrics;
 import com.nammametro.simulation.trainsim.domain.model.Signal;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
@@ -60,7 +62,8 @@ public class LineScheduleAssembler {
 
         EngineSettings settings = new EngineSettings(
                 config.baseSimSecondsPerTick(), config.headwaySeconds(),
-                config.delayThresholdSeconds(), config.randomSeed());
+                config.delayThresholdSeconds(), config.randomSeed(),
+                DemandProfile.valueOf(config.demandProfileMode()), config.demandMultiplier());
 
         SimulationClock clock = new SimulationClock(
                 config.startTime(), SimulationStatus.STOPPED,
@@ -77,7 +80,8 @@ public class LineScheduleAssembler {
         }
 
         List<Signal> signals = network.allTracks().stream().map(track -> Signal.free(track.id())).toList();
-        return new Assembled(new SimulationState(clock, trains, signals), settings);
+        SimulationState initial = new SimulationState(clock, trains, signals, List.of(), PassengerMetrics.empty());
+        return new Assembled(initial, settings);
     }
 
     private List<TrainState> expand(LineSchedule schedule, Map<String, Integer> sequenceByLineCode) {

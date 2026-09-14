@@ -47,4 +47,12 @@ public record TrainState(
         double accelerationMps2,
         double brakingRateMps2
 ) {
+
+    /** Used by {@code PassengerBoardingHandler} to record alighting/boarding deltas — every other
+     * field is untouched, same convention as {@code TrainMovementTickHandler}'s own with-helpers. */
+    public TrainState withPassengerCount(int newPassengerCount) {
+        return new TrainState(id, code, lineCode, direction, currentTrackId, previousStationId, nextStationId,
+                progress, speedKmph, status, newPassengerCount, capacity, dwellRemainingSeconds, heldSeconds,
+                scheduledDepartureSeconds, dwellTimeSeconds, maxSpeedKmph, accelerationMps2, brakingRateMps2);
+    }
 }

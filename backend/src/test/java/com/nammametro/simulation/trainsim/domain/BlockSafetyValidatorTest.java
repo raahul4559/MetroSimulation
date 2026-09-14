@@ -12,6 +12,7 @@ import com.nammametro.simulation.trainsim.application.TickContext;
 import com.nammametro.simulation.trainsim.application.tick.ClockAdvanceHandler;
 import com.nammametro.simulation.trainsim.application.tick.TrainMovementTickHandler;
 import com.nammametro.simulation.trainsim.domain.model.EngineSettings;
+import com.nammametro.simulation.trainsim.domain.model.PassengerMetrics;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
@@ -73,7 +74,7 @@ class BlockSafetyValidatorTest {
         }
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
-        SimulationState state = new SimulationState(clock, trains, List.of());
+        SimulationState state = new SimulationState(clock, trains, List.of(), List.of(), PassengerMetrics.empty());
 
         List<String> allIssuesEverSeen = new ArrayList<>();
         int ticksUntilAllComplete = 0;
