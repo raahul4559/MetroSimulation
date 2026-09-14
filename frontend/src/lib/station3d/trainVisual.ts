@@ -24,6 +24,8 @@ export function selectStationTrainVisuals(
     const resolved = resolvePhase(train, stationId);
     if (!resolved) continue;
     const line = lineByCode.get(train.lineCode);
+    const destination = destinationStation(train, line, stationsById);
+    const nextStation = nextStationFor(train, platform, stationsById);
     visuals.push({
       trainId: train.id,
       code: train.code,
@@ -35,8 +37,10 @@ export function selectStationTrainVisuals(
       passengerCount: train.passengerCount,
       capacity: train.capacity,
       delaySeconds: train.delaySeconds,
-      destinationStationName: destinationName(train, line, stationsById),
-      nextStationName: nextStationNameFor(train, platform, stationsById),
+      destinationStationName: destination?.name ?? "",
+      destinationStationCode: destination?.code ?? null,
+      nextStationName: nextStation?.name ?? "",
+      nextStationCode: nextStation?.code ?? null,
     });
   }
   return visuals;
@@ -88,19 +92,19 @@ function resolvePhase(train: TrainState, stationId: number): { phase: TrainPhase
  * ends at the line's last station, INBOUND at its first, exactly how `TrainDispatcher`/
  * `LineScheduleAssembler` build the route on the backend. Not a field the backend sends (only the
  * current leg's endpoints are), so it's derived here rather than duplicated as separate state. */
-function destinationName(train: TrainState, line: Line | undefined, stationsById: ReadonlyMap<number, Station>): string {
-  if (!line || line.stations.length === 0) return "";
+function destinationStation(train: TrainState, line: Line | undefined, stationsById: ReadonlyMap<number, Station>): Station | null {
+  if (!line || line.stations.length === 0) return null;
   const terminus = train.direction === "OUTBOUND" ? line.stations[line.stations.length - 1] : line.stations[0];
-  return (terminus && stationsById.get(terminus.id)?.name) ?? terminus?.name ?? "";
+  return (terminus && stationsById.get(terminus.id)) ?? terminus ?? null;
 }
 
 /** This train's immediate next stop after this station, in its direction of travel — the real
  * adjacent station id already resolved onto {@link PlatformLayout3D} (outbound/inbound neighbor),
- * not re-derived from the line's station list here. Empty string at a terminus, where that
- * direction's neighbor is `null`. */
-function nextStationNameFor(train: TrainState, platform: PlatformLayout3D, stationsById: ReadonlyMap<number, Station>): string {
+ * not re-derived from the line's station list here. `null` at a terminus, where that direction's
+ * neighbor is `null`. */
+function nextStationFor(train: TrainState, platform: PlatformLayout3D, stationsById: ReadonlyMap<number, Station>): Station | null {
   const neighborId = train.direction === "OUTBOUND" ? platform.outboundNeighborId : platform.inboundNeighborId;
-  return neighborId == null ? "" : (stationsById.get(neighborId)?.name ?? "");
+  return neighborId == null ? null : (stationsById.get(neighborId) ?? null);
 }
 
 function clamp01(value: number): number {

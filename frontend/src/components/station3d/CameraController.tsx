@@ -32,6 +32,20 @@ interface FramingPreset {
   target: readonly [number, number, number];
 }
 
+/** Rotates a local station-space point (x, z) by the station's real `orientationRadians` — the
+ * same Y-rotation `StationModel` applies to the whole platform/track/environment group. The
+ * camera itself is a top-level scene object, not a child of that rotated group, so every position/
+ * target/look-at this controller computes in "local" coordinates (platform module x, track z) must
+ * go through this before being handed to `camera.position`/`camera.lookAt` — otherwise, for any
+ * station whose real bearing isn't ~0°, the camera frames empty space next to the actual (rotated)
+ * geometry rather than the geometry itself. Caught in manual testing: Majestic's ~90° bearing made
+ * the tight UNDERGROUND establishing shot point completely away from the platform. */
+function rotateY(x: number, z: number, radians: number): readonly [number, number] {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return [x * cos + z * sin, -x * sin + z * cos];
+}
+
 /**
  * Owns the camera for all four modes. OVERVIEW/FREE/PASSENGER hand the camera to drei's
  * `OrbitControls`; FOLLOW disables it and drives the camera itself every frame from the tracked
@@ -64,20 +78,29 @@ export function CameraController({ mode, layout, trains, buildType, resetToken }
   const isTrackingTrain = mode === "FOLLOW" && followTarget != null;
 
   const framing = useMemo<FramingPreset>(() => {
+    const theta = layout.orientationRadians;
+    const toWorld = (x: number, y: number, z: number): readonly [number, number, number] => {
+      const [wx, wz] = rotateY(x, z, theta);
+      return [wx, y, wz];
+    };
+
     if (mode === "FREE") {
       return underground
-        ? { position: [stationCenterX - 6, 6.5, 20], target: [stationCenterX, 1.5, 0] }
-        : { position: [stationCenterX - 10, 16, 34], target: [stationCenterX, 1, 0] };
+        ? { position: toWorld(stationCenterX - 6, 6.5, 20), target: toWorld(stationCenterX, 1.5, 0) }
+        : { position: toWorld(stationCenterX - 10, 16, 34), target: toWorld(stationCenterX, 1, 0) };
     }
     if (mode === "PASSENGER") {
-      return { position: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4], target: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4 + 1] };
+      return {
+        position: toWorld(firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4),
+        target: toWorld(firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4 + 1),
+      };
     }
     // OVERVIEW, and FOLLOW while no train is actually visible to track yet. Kept well under
     // `TUNNEL_HEIGHT` underground so the establishing shot never ends up above the tunnel ceiling.
     return underground
-      ? { position: [stationCenterX + 8, Math.min(7.5, TUNNEL_HEIGHT - 2), 26], target: [stationCenterX, 2.5, 0] }
-      : { position: [stationCenterX + 18, 28, 54], target: [stationCenterX, 2, 0] };
-  }, [mode, stationCenterX, firstModuleX, underground]);
+      ? { position: toWorld(stationCenterX + 8, Math.min(7.5, TUNNEL_HEIGHT - 2), 26), target: toWorld(stationCenterX, 2.5, 0) }
+      : { position: toWorld(stationCenterX + 18, 28, 54), target: toWorld(stationCenterX, 2, 0) };
+  }, [mode, stationCenterX, firstModuleX, underground, layout.orientationRadians]);
 
   // React's own "adjust state during render" pattern (not a ref, not an effect — see
   // https://react.dev/reference/react/useState#storing-information-from-previous-renders):
@@ -99,9 +122,11 @@ export function CameraController({ mode, layout, trains, buildType, resetToken }
 
     const pose = trainPose3D(platform, followTarget.direction, followTarget.phase, followTarget.localProgress);
     const behindZ = followTarget.direction === "OUTBOUND" ? -13 : 13;
-    const desired = new THREE.Vector3(pose.x + 4, 6.5, pose.z + behindZ);
+    const [desiredX, desiredZ] = rotateY(pose.x + 4, pose.z + behindZ, layout.orientationRadians);
+    const [lookX, lookZ] = rotateY(pose.x, pose.z, layout.orientationRadians);
+    const desired = new THREE.Vector3(desiredX, 6.5, desiredZ);
     camera.position.lerp(desired, CAMERA_FOLLOW_LERP);
-    camera.lookAt(pose.x, 1.6, pose.z);
+    camera.lookAt(lookX, 1.6, lookZ);
   });
 
   if (isTrackingTrain) return null;

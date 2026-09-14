@@ -1,0 +1,145 @@
+import type { LanguageCode } from "@/domain/announcement";
+
+export interface SpeakOptions {
+  readonly volume: number;
+  readonly rate?: number;
+}
+
+/**
+ * Abstraction over "turn this text into spoken audio in this language" — kept separate from
+ * `AudioManager` (which owns chimes/rumble/ambience/settings) and entirely outside React/the 3D
+ * scene, exactly so the underlying engine can be swapped later (a hosted Indian-language TTS API,
+ * say) without touching `AnnouncementQueue` or any component. `WebSpeechVoiceProvider` below is the
+ * only implementation today, using the browser's own Speech Synthesis API — there is no bundled or
+ * licensed Namma Metro voice audio in this repo.
+ */
+export interface VoiceProvider {
+  /** Speaks `text` in `language` and resolves once that utterance finishes (or errors/is
+   * cancelled) — callers await this to know when it's safe to start the next utterance, which is
+   * how `AnnouncementQueue` guarantees languages never overlap. No-ops (resolves immediately) if
+   * speech synthesis isn't available or `text` is empty. */
+  speak(text: string, language: LanguageCode, opts: SpeakOptions): Promise<void>;
+  /** Stops whatever is currently speaking and drops anything queued at the browser level — does not
+   * touch `AnnouncementQueue`'s own queue, callers clear that separately. */
+  cancelAll(): void;
+}
+
+/** BCP-47 tag to fall back to when no matching installed voice exists, so the browser at least
+ * attempts the right language's phonetics/prosody even without a locked voice identity. */
+const FALLBACK_LANG_TAG: Readonly<Record<LanguageCode, string>> = {
+  en: "en-IN",
+  hi: "hi-IN",
+  kn: "kn-IN",
+};
+
+/** Preferred voice `lang` tags, most-specific first, for a natural Indian-accented reading of each
+ * language — checked as exact matches, then as prefixes (some engines report `hi-IN-x` variants). */
+const PREFERRED_LANG_TAGS: Readonly<Record<LanguageCode, readonly string[]>> = {
+  en: ["en-in"],
+  hi: ["hi-in", "hi"],
+  kn: ["kn-in", "kn"],
+};
+
+/** Named Indian-accented voices several browsers/OSes ship (Edge/Windows, Chrome/Android) — checked
+ * by substring against the voice's reported name when a `lang`-tag match isn't available. Kannada
+ * has essentially no dedicated desktop-browser voices as of writing; a `kn-IN` `lang` match (mobile
+ * Chrome, some Android WebViews) is the realistic path there, this list is a bonus, not the primary
+ * mechanism. */
+const NAME_HINTS: Readonly<Record<LanguageCode, readonly string[]>> = {
+  en: ["india", "ravi", "heera", "neerja", "indian"],
+  hi: ["hindi", "swara", "madhur"],
+  kn: ["kannada"],
+};
+
+const VOICE_LOAD_TIMEOUT_MS = 1000;
+
+/**
+ * `VoiceProvider` over `window.speechSynthesis`. Picks one voice per language on first use and
+ * reuses it for every subsequent announcement in that language — a consistent voice identity per
+ * spec, never re-picked at random between calls — preferring an Indian-tagged/named voice and
+ * falling back to whatever the platform actually has rather than failing silently.
+ */
+class WebSpeechVoiceProvider implements VoiceProvider {
+  private voicesReadyPromise: Promise<void> | null = null;
+  private readonly chosenVoice = new Map<LanguageCode, SpeechSynthesisVoice | null>();
+
+  async speak(text: string, language: LanguageCode, opts: SpeakOptions): Promise<void> {
+    if (!text || !hasSpeechSynthesis()) return;
+    await this.ensureVoicesReady();
+    const voice = this.resolveVoice(language);
+
+    return new Promise<void>((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang;
+      } else {
+        utterance.lang = FALLBACK_LANG_TAG[language];
+      }
+      // Calm, moderate-paced professional PA delivery — slightly below 1x, never the clipped
+      // word-by-word cadence of a default TTS rate.
+      utterance.rate = opts.rate ?? 0.93;
+      utterance.pitch = 1;
+      utterance.volume = Math.min(1, Math.max(0, opts.volume));
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
+  cancelAll(): void {
+    if (hasSpeechSynthesis()) window.speechSynthesis.cancel();
+  }
+
+  private ensureVoicesReady(): Promise<void> {
+    if (!hasSpeechSynthesis()) return Promise.resolve();
+    if (this.voicesReadyPromise) return this.voicesReadyPromise;
+
+    this.voicesReadyPromise = new Promise<void>((resolve) => {
+      if (window.speechSynthesis.getVoices().length > 0) {
+        resolve();
+        return;
+      }
+      const onVoicesChanged = () => {
+        window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+        resolve();
+      };
+      window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+      // Some browsers populate voices synchronously and never fire `voiceschanged` at all — don't
+      // block the first announcement on an event that may never come.
+      window.setTimeout(resolve, VOICE_LOAD_TIMEOUT_MS);
+    });
+    return this.voicesReadyPromise;
+  }
+
+  private resolveVoice(language: LanguageCode): SpeechSynthesisVoice | null {
+    if (this.chosenVoice.has(language)) return this.chosenVoice.get(language) ?? null;
+
+    const voices = window.speechSynthesis.getVoices();
+    const voice = findByLangTag(voices, PREFERRED_LANG_TAGS[language]) ?? findByNameHint(voices, NAME_HINTS[language]);
+    this.chosenVoice.set(language, voice);
+    return voice;
+  }
+}
+
+function findByLangTag(voices: readonly SpeechSynthesisVoice[], tags: readonly string[]): SpeechSynthesisVoice | null {
+  for (const tag of tags) {
+    const exact = voices.find((v) => v.lang.toLowerCase() === tag);
+    if (exact) return exact;
+  }
+  for (const tag of tags) {
+    const prefixed = voices.find((v) => v.lang.toLowerCase().startsWith(tag));
+    if (prefixed) return prefixed;
+  }
+  return null;
+}
+
+function findByNameHint(voices: readonly SpeechSynthesisVoice[], hints: readonly string[]): SpeechSynthesisVoice | null {
+  return voices.find((v) => hints.some((hint) => v.name.toLowerCase().includes(hint))) ?? null;
+}
+
+function hasSpeechSynthesis(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+
+export const voiceProvider: VoiceProvider = new WebSpeechVoiceProvider();

@@ -64,10 +64,16 @@ export interface TrainVisual3D {
   readonly capacity: number;
   readonly delaySeconds: number;
   readonly destinationStationName: string;
+  /** Real network code of {@code destinationStationName} — {@code null} only if that name couldn't
+   * be resolved to a real {@code Station} (station data momentarily incomplete). Used to look up the
+   * correct spoken pronunciation per announcement language, never displayed itself. */
+  readonly destinationStationCode: string | null;
   /** This train's immediate next stop after (or, if still short of the station, at) this station —
    * the real adjacent station from {@code PlatformLayout3D}'s neighbor ids, not the final terminus.
    * Empty string only when this leg has nowhere further to go (a terminating train). */
   readonly nextStationName: string;
+  /** Real network code of {@code nextStationName} — {@code null} at a terminus, same as that field. */
+  readonly nextStationCode: string | null;
 }
 
 export type CameraMode3D = "OVERVIEW" | "PASSENGER" | "FOLLOW" | "FREE";
