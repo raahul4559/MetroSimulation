@@ -25,9 +25,11 @@ import java.util.stream.Collectors;
 
 /**
  * Advances every train by one tick: dwell countdown, headway-gated departure, continuous progress
- * along the current track, and arrival handling. Occupancy is read from the SNAPSHOT of
- * {@code current} taken before any train in this tick is updated, so the result is independent of
- * train iteration order — a determinism requirement, not just tidiness.
+ * along the current track under real accel/cruise/brake kinematics, and arrival handling.
+ * Occupancy is read from the SNAPSHOT of {@code current} taken before any train in this tick is
+ * updated, so the result is independent of train iteration order — a determinism requirement, not
+ * just tidiness. {@link TrainStatus#SCHEDULED} trains are untouched here — releasing them into
+ * service is {@code TrainDispatcher}'s job, earlier in the pipeline.
  */
 public class TrainMovementTickHandler implements TickHandler {
 
@@ -71,12 +73,12 @@ public class TrainMovementTickHandler implements TickHandler {
         MetroNetwork network = ctx.network();
 
         return switch (train.status()) {
-            case COMPLETED -> StepResult.unchanged(train);
+            case SCHEDULED, COMPLETED -> StepResult.unchanged(train);
 
             case AT_STATION -> {
                 Station station = network.findStation(train.previousStationId()).orElseThrow();
                 yield StepResult.of(
-                        withDwellStatus(train, station.dwellTimeSeconds()),
+                        withDwellStatus(train, train.dwellTimeSeconds()),
                         event(tick, simTime, EventType.DWELL_STARTED, train, station.id(),
                                 "%s began dwelling at %s".formatted(train.code(), station.name())));
             }
@@ -94,18 +96,15 @@ public class TrainMovementTickHandler implements TickHandler {
             case DEPARTING -> {
                 Track track = network.getSingleTrackBetween(train.previousStationId(), train.nextStationId())
                         .orElseThrow();
-                double progress = Math.min(1.0, delta / (double) track.expectedTravelTimeSeconds());
-                TrainState next = progress >= 1.0 ? arriving(train, track) : running(train, track, progress);
-                yield StepResult.of(next, event(tick, simTime, EventType.DEPARTED, train, train.previousStationId(),
-                        "%s departed toward %s".formatted(train.code(), stationName(network, train.nextStationId()))));
+                yield StepResult.of(advanceAlongTrack(train, track, delta),
+                        event(tick, simTime, EventType.DEPARTED, train, train.previousStationId(),
+                                "%s departed toward %s".formatted(train.code(), stationName(network, train.nextStationId()))));
             }
 
             case RUNNING -> {
                 Track track = network.getSingleTrackBetween(train.previousStationId(), train.nextStationId())
                         .orElseThrow();
-                double progress = Math.min(1.0, train.progress() + delta / (double) track.expectedTravelTimeSeconds());
-                yield StepResult.unchanged(
-                        progress >= 1.0 ? arriving(train, track) : running(train, track, progress));
+                yield StepResult.unchanged(advanceAlongTrack(train, track, delta));
             }
 
             case ARRIVING -> {
@@ -116,6 +115,40 @@ public class TrainMovementTickHandler implements TickHandler {
                                 "%s arrived at %s".formatted(train.code(), arrivedAt.name())));
             }
         };
+    }
+
+    /**
+     * One tick of real kinematics along the train's current track: accelerate toward
+     * {@code maxSpeedKmph} unless the remaining distance is inside the braking distance needed to
+     * stop at the platform ({@code v^2 / (2 * brakingRateMps2)}), in which case decelerate instead —
+     * the standard "always look ahead to the stop point" trapezoidal-profile controller. Distance
+     * covered this tick is the trapezoidal average of the speed at the start and end of the tick,
+     * which is exact for constant acceleration and a good approximation across the accel/brake
+     * transition. Never overshoots the platform: progress clamps at 1.0 and the train becomes
+     * {@link TrainStatus#ARRIVING} instead.
+     */
+    private TrainState advanceAlongTrack(TrainState train, Track track, long delta) {
+        double trackLengthMetres = track.distanceMetres();
+        double distanceIntoTrack = train.progress() * trackLengthMetres;
+        double remaining = trackLengthMetres - distanceIntoTrack;
+
+        double v0 = train.speedKmph() / 3.6;
+        double maxSpeed = train.maxSpeedKmph() / 3.6;
+        double brakingDistance = (v0 * v0) / (2 * train.brakingRateMps2());
+
+        double v1 = remaining <= brakingDistance
+                ? Math.max(0, v0 - train.brakingRateMps2() * delta)
+                : Math.min(maxSpeed, v0 + train.accelerationMps2() * delta);
+
+        double distanceThisTick = (v0 + v1) / 2.0 * delta;
+        double newDistanceIntoTrack = Math.min(trackLengthMetres, distanceIntoTrack + distanceThisTick);
+        double newProgress = trackLengthMetres > 0 ? newDistanceIntoTrack / trackLengthMetres : 1.0;
+
+        if (newProgress >= 1.0) {
+            return arriving(train, track);
+        }
+        return withStatus(train, TrainStatus.RUNNING, train.previousStationId(), train.nextStationId(), track.id(),
+                newProgress, v1 * 3.6, 0);
     }
 
     private StepResult handleDwellExpiry(TrainState train, TickContext ctx, long tick, Instant simTime,
@@ -185,12 +218,6 @@ public class TrainMovementTickHandler implements TickHandler {
         return network.findStation(stationId).map(Station::name).orElse("?");
     }
 
-    private TrainState running(TrainState train, Track track, double progress) {
-        double speedKmph = (track.distanceMetres() / 1000.0) / (track.expectedTravelTimeSeconds() / 3600.0);
-        return withStatus(train, TrainStatus.RUNNING, train.previousStationId(), train.nextStationId(), track.id(),
-                progress, speedKmph, 0);
-    }
-
     private TrainState arriving(TrainState train, Track track) {
         return withStatus(train, TrainStatus.ARRIVING, train.previousStationId(), train.nextStationId(), track.id(),
                 1.0, 0, 0);
@@ -209,14 +236,17 @@ public class TrainMovementTickHandler implements TickHandler {
     private TrainState withDwellRemaining(TrainState train, int dwellRemainingSeconds) {
         return new TrainState(train.id(), train.code(), train.lineCode(), train.direction(), train.currentTrackId(),
                 train.previousStationId(), train.nextStationId(), train.progress(), train.speedKmph(), train.status(),
-                train.passengerCount(), train.capacity(), dwellRemainingSeconds, train.heldSeconds());
+                train.passengerCount(), train.capacity(), dwellRemainingSeconds, train.heldSeconds(),
+                train.scheduledDepartureSeconds(), train.dwellTimeSeconds(), train.maxSpeedKmph(),
+                train.accelerationMps2(), train.brakingRateMps2());
     }
 
     private TrainState withStatus(TrainState train, TrainStatus status, long previousStationId, long nextStationId,
                                    Long currentTrackId, double progress, double speedKmph, int heldSeconds) {
         return new TrainState(train.id(), train.code(), train.lineCode(), train.direction(), currentTrackId,
                 previousStationId, nextStationId, progress, speedKmph, status, train.passengerCount(),
-                train.capacity(), 0, heldSeconds);
+                train.capacity(), 0, heldSeconds, train.scheduledDepartureSeconds(), train.dwellTimeSeconds(),
+                train.maxSpeedKmph(), train.accelerationMps2(), train.brakingRateMps2());
     }
 
     private SimulationEvent event(long tick, Instant simTime, EventType type, TrainState train, Long stationId,

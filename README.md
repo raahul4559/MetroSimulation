@@ -51,8 +51,10 @@ make dev-frontend   # (from repo root) or: cd frontend && npm install && npm run
 
 Open `http://localhost:3000`. You should see the Purple/Green/Yellow line schematic (served by the
 graph engine, with interchanges called out), a "Live" connection indicator, and a Simulation panel
-with Start/Pause/Reset. The discrete-time train engine (`/api/simulation/*`) isn't wired into this
-UI yet — drive and observe it via `curl`/WebSocket as shown below.
+with Start/Pause/Stop/Reset and a speed selector. Press Start: trains dispatch onto the map at their
+scheduled times (per line, per direction — see `LineFilter`), move with real accel/cruise/brake
+kinematics, and show up in the Train list/Train details sidebar; click a train (on the map or in the
+list) to select it and focus the map on it.
 
 ## Verifying
 
@@ -61,7 +63,7 @@ Each of these was run against a live instance while building this, not assumed:
 ```bash
 # Database has real seed data
 psql metro_simulation -c "select count(*) from stations"   # → 20
-psql metro_simulation -c "select code, direction from trains"  # → 6 rows, half OUTBOUND half INBOUND
+psql metro_simulation -c "select line_id, direction, train_count, headway_seconds from line_schedules"  # → 6 rows
 
 # Backend ↔ database
 curl localhost:8080/actuator/health                          # → status: UP, db: UP
@@ -70,19 +72,22 @@ curl localhost:8080/actuator/health                          # → status: UP, d
 curl localhost:8080/api/metro/network                         # → 21 stations, 3 lines, 2 interchanges
 curl "localhost:8080/api/metro/route?from=9&to=5"              # → Whitefield → Majestic, ordered stops
 
-# Discrete-time train simulation engine
+# Discrete-time train simulation engine — scheduled dispatch + real kinematics
 curl -X POST localhost:8080/api/simulation/start
 curl -X POST "localhost:8080/api/simulation/speed?value=10"
 curl localhost:8080/api/simulation/state
-# → each train's progress moves continuously 0→1 across successive calls, never jumps
+# → trains start SCHEDULED and flip to AT_STATION at their own scheduledDepartureSeconds; once
+#   RUNNING, speedKmph ramps 0 → maxSpeedKmph → 0 across a leg (not a flat distance/time average),
+#   and progress moves continuously 0→1 across successive calls, never jumps
 
-# Backend unit tests — network validation, routing, and the engine's tick handlers
-# (the last of these asserts identical trajectories from identical inputs — the determinism
-# requirement, pinned down as a test rather than a claim)
-cd backend && ./mvnw test -Dtest='MetroNetworkValidationTest,DijkstraRouteFinderTest,TrainMovementTickHandlerTest'
+# Backend unit tests — network validation, routing, and the engine's scheduling/dispatch/movement
+# (the determinism test asserts identical trajectories from identical inputs, pinned down as a test
+# rather than a claim; the schedule-assembler test asserts a bad first/last/headway/count combination
+# is rejected at load rather than silently producing the wrong number of trains)
+cd backend && ./mvnw test -Dtest='MetroNetworkValidationTest,DijkstraRouteFinderTest,TrainMovementTickHandlerTest,TrainDispatcherTest,LineScheduleAssemblerTest'
 
 # Frontend ↔ backend
-open http://localhost:3000   # map renders from /api/metro/network, clock ticks live, no console errors
+open http://localhost:3000   # map renders trains live from /topic/train-simulation/state, no console errors
 ```
 
 `make verify` runs the scriptable subset of these (health, lines, network graph, frontend reachability).
@@ -91,7 +96,6 @@ open http://localhost:3000   # map renders from /api/metro/network, clock ticks 
 
 Passenger demand/generation and capacity-aware boarding, disruption injection beyond headway holds,
 and analytics are the natural next engine features — `TickContext.random()` is already wired through,
-seeded and ready, for the first of these. On the frontend: rendering live train positions from
-`/topic/train-simulation/state` and a trip-planner UI over `/api/metro/route` are both straightforward
-next steps, since the backend contracts for both already exist and are verified. See
-`docs/architecture.md` and `docs/domain-model.md` for exactly where each plugs in.
+seeded and ready, for the first of these. A trip-planner UI over `/api/metro/route` is a natural next
+frontend step, since the backend contract already exists and is verified. See `docs/architecture.md`
+and `docs/domain-model.md` for exactly where each plugs in.

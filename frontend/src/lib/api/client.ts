@@ -56,3 +56,6 @@ export const apiClient = createApiClient(env.apiBaseUrl);
 
 /** The metro network/routing graph API — `/api/metro/*`, a separate base path on the same backend. */
 export const metroApiClient = createApiClient(env.metroApiBaseUrl);
+
+/** The discrete-time train simulation engine — `/api/simulation/*`, a separate base path on the same backend. */
+export const trainSimApiClient = createApiClient(env.trainSimApiBaseUrl);

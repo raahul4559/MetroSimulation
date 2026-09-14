@@ -16,5 +16,9 @@ export const env = {
     "NEXT_PUBLIC_METRO_API_BASE_URL",
     process.env.NEXT_PUBLIC_METRO_API_BASE_URL
   ),
+  trainSimApiBaseUrl: requireEnv(
+    "NEXT_PUBLIC_TRAIN_SIM_API_BASE_URL",
+    process.env.NEXT_PUBLIC_TRAIN_SIM_API_BASE_URL
+  ),
   wsUrl: requireEnv("NEXT_PUBLIC_WS_URL", process.env.NEXT_PUBLIC_WS_URL),
 } as const;

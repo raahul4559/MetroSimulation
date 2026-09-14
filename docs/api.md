@@ -7,8 +7,10 @@ Three independent base URLs on the same backend — see `docs/architecture.md` f
   the backend.
 - `http://localhost:8080/api/metro` — the network graph and routing (JSON-dataset-backed). Override
   with `NEXT_PUBLIC_METRO_API_BASE_URL`.
-- `http://localhost:8080/api/simulation` — the discrete-time train simulation engine (Postgres roster
-  + config, `metro`'s graph for topology). No frontend env var yet — not wired into the UI this chunk.
+- `http://localhost:8080/api/simulation` — the discrete-time train simulation engine (Postgres
+  schedules + config, `metro`'s graph for topology). Frontend env var `NEXT_PUBLIC_TRAIN_SIM_API_BASE_URL`;
+  this is the engine the map's train layer and sidebar (Simulation controls, Line filter, Train
+  list/details) are wired to.
 
 ## REST — simulation clock (`/api/v1`)
 
@@ -70,8 +72,10 @@ Example — start, speed up, and watch a train actually move (not teleport) alon
 curl -X POST http://localhost:8080/api/simulation/start
 curl -X POST "http://localhost:8080/api/simulation/speed?value=10"
 curl http://localhost:8080/api/simulation/state
-# trains[].progress moves continuously 0→1 across ticks; trains[].speedKmph reflects the
-# real distance/travel-time of whichever track they're currently on.
+# trains[].progress moves continuously 0→1 across ticks; trains[].speedKmph is real per-train
+# momentum — accelerates toward maxSpeedKmph, cruises, brakes to a stop at the platform — and
+# trains[].status starts SCHEDULED until scheduledDepartureSeconds, generated from each line's
+# LineSchedule (see docs/architecture.md).
 ```
 
 ### Error format
@@ -105,14 +109,18 @@ One STOMP endpoint, three topics:
   (real-time train positions):
   ```json
   { "clock": { "status": "RUNNING", "currentTick": 12, "elapsedSimulationSeconds": 60, "speed": 5.0, ... },
-    "trains": [ { "code": "PL-01", "status": "RUNNING", "progress": 0.34, "speedKmph": 34.0, ... } ] }
+    "trains": [ { "code": "P01", "status": "RUNNING", "progress": 0.34, "speedKmph": 34.0,
+                  "scheduledDepartureSeconds": 0, "maxSpeedKmph": 80.0, "delaySeconds": 0, ... } ] }
   ```
 - `/topic/train-simulation/events` — only the discrete occurrences from a tick (empty ticks publish
   nothing here), one array per message:
   ```json
-  [ { "tick": 22, "type": "DEPARTED", "trainCode": "YL-01", "message": "YL-01 departed toward Central Silk Board" } ]
+  [ { "tick": 22, "type": "DEPARTED", "trainCode": "Y01", "message": "Y01 departed toward Central Silk Board" } ]
   ```
 
-The frontend's wrapper for the legacy topic is `frontend/src/lib/ws/simulation-socket.ts`; it
-auto-reconnects with a 3-second backoff. Nothing consumes the two `train-simulation` topics from the
-frontend yet — verified directly with a raw STOMP client instead (see `docs/architecture.md`).
+The frontend's wrapper for the legacy topic is `frontend/src/lib/ws/simulation-socket.ts`; the
+trainsim state topic has its own wrapper at `frontend/src/lib/ws/train-simulation-socket.ts`
+(`useTrainSimulation`/`useTrainSimulationSocket` bridge it into React) — both auto-reconnect with a
+3-second backoff. Nothing consumes `/topic/train-simulation/events` from the frontend yet (the map
+only needs continuous state, not the discrete event log) — verified directly with a raw STOMP client
+instead.

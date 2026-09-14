@@ -1,16 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
+import type { TrainState } from "@/domain/trainsim";
 import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
 import { buildProjector } from "@/lib/geometry/projection";
 import { viewBoxString } from "@/lib/geometry/layout";
 import { isStationVisible, shouldShowLabel } from "@/lib/metro/visibility";
+import { interpolateTrainPoint } from "@/lib/metro/trainPosition";
 import { useMapViewport } from "@/hooks/useMapViewport";
-import { useLineVisibility } from "@/hooks/useLineVisibility";
 import { MetroLine } from "./MetroLine";
 import { StationMarker } from "./StationMarker";
 import { StationLabel } from "./StationLabel";
+import { TrainMarker } from "./TrainMarker";
 import { MapControls } from "./MapControls";
 import { StationPanel } from "./StationPanel";
 
@@ -20,16 +22,34 @@ interface MetroMapProps {
   lines: readonly Line[];
   stations: readonly Station[];
   tracks: readonly Track[];
+  trains: readonly TrainState[];
   connectionStatus: ConnectionStatus;
+  hiddenLineCodes: ReadonlySet<string>;
+  onToggleLine: (code: string) => void;
+  selectedTrainId: number | null;
+  onSelectTrain: (id: number | null) => void;
+  focusToken: number;
 }
 
 /**
- * The primary interactive network map: renders lines, stations, and labels from backend data,
- * and owns pan/zoom, line/label visibility, and station selection. No business logic lives
- * here — projection, adjacency, and visibility rules all come from `lib/geometry` and
- * `lib/metro`.
+ * The primary interactive network map: renders lines, stations, labels, and live trains from
+ * backend data, and owns pan/zoom and station selection (line visibility and train selection are
+ * lifted to the caller so `LineFilter`/`TrainList` can share them). No business logic lives here —
+ * projection, adjacency, visibility, and train-position interpolation all come from `lib/geometry`
+ * and `lib/metro`.
  */
-export function MetroMap({ lines, stations, tracks, connectionStatus }: MetroMapProps) {
+export function MetroMap({
+  lines,
+  stations,
+  tracks,
+  trains,
+  connectionStatus,
+  hiddenLineCodes,
+  onToggleLine,
+  selectedTrainId,
+  onSelectTrain,
+  focusToken,
+}: MetroMapProps) {
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
 
   const project = useMemo(() => buildProjector(stations, VIEWPORT), [stations]);
@@ -37,14 +57,39 @@ export function MetroMap({ lines, stations, tracks, connectionStatus }: MetroMap
     const byId = new Map(stations.map((station) => [station.id, station]));
     return [...byId.values()];
   }, [stations]);
+  const stationsById = useMemo(
+    () => new Map(uniqueStations.map((station) => [station.id, station])),
+    [uniqueStations]
+  );
+  const lineByCode = useMemo(() => new Map(lines.map((line) => [line.code, line])), [lines]);
 
-  const { svgRef, scale, transform, zoomIn, zoomOut, fitNetwork, panHandlers } =
+  const { svgRef, scale, transform, zoomIn, zoomOut, fitNetwork, focusOn, panHandlers } =
     useMapViewport(VIEWPORT);
-  const { hiddenLineCodes, toggleLine } = useLineVisibility();
   const [labelsVisible, setLabelsVisible] = useState(true);
 
   const visibleLines = lines.filter((line) => !hiddenLineCodes.has(line.code));
+  const visibleTrains = trains.filter((train) => !hiddenLineCodes.has(train.lineCode));
   const selectedStation = uniqueStations.find((s) => s.id === selectedStationId) ?? null;
+
+  const trainsRef = useRef(trains);
+  useEffect(() => {
+    trainsRef.current = trains;
+  }, [trains]);
+
+  useEffect(() => {
+    if (selectedTrainId == null) return;
+    const train = trainsRef.current.find((t) => t.id === selectedTrainId);
+    if (!train) return;
+    const point = interpolateTrainPoint(train, stationsById, project);
+    if (point) focusOn(point);
+    // Re-run only when the caller explicitly asks to (re-)focus — not every tick a train moves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusToken, selectedTrainId]);
+
+  const deselectAll = () => {
+    setSelectedStationId(null);
+    onSelectTrain(null);
+  };
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-md bg-slate-950">
@@ -54,7 +99,7 @@ export function MetroMap({ lines, stations, tracks, connectionStatus }: MetroMap
         className="h-full w-full touch-none cursor-grab active:cursor-grabbing"
         role="img"
         aria-label="Namma Metro network map"
-        onClick={() => setSelectedStationId(null)}
+        onClick={deselectAll}
         {...panHandlers}
       >
         <g transform={`translate(${transform.tx} ${transform.ty}) scale(${transform.scale})`}>
@@ -84,13 +129,28 @@ export function MetroMap({ lines, stations, tracks, connectionStatus }: MetroMap
                 visible={shouldShowLabel(station, scale, labelsVisible)}
               />
             ))}
+          {visibleTrains.map((train) => {
+            const point = interpolateTrainPoint(train, stationsById, project);
+            if (!point) return null;
+            return (
+              <TrainMarker
+                key={train.id}
+                train={train}
+                point={point}
+                scale={scale}
+                colorHex={lineByCode.get(train.lineCode)?.colorHex ?? "#94a3b8"}
+                selected={train.id === selectedTrainId}
+                onSelect={(t) => onSelectTrain(t.id)}
+              />
+            );
+          })}
         </g>
       </svg>
 
       <MapControls
         lines={lines}
         hiddenLineCodes={hiddenLineCodes}
-        onToggleLine={toggleLine}
+        onToggleLine={onToggleLine}
         labelsVisible={labelsVisible}
         onToggleLabels={() => setLabelsVisible((v) => !v)}
         scale={scale}

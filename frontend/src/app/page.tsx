@@ -1,33 +1,49 @@
 "use client";
 
+import { useState } from "react";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useSimulationState } from "@/hooks/useSimulationState";
+import { useTrainSimulation } from "@/hooks/useTrainSimulation";
+import { useLineVisibility } from "@/hooks/useLineVisibility";
 import { MetroMap } from "@/components/map/MetroMap";
 import { Panel } from "@/components/ui/Panel";
 import { ConnectionIndicator } from "@/components/ui/ConnectionIndicator";
-import { SimulationClockDisplay } from "@/components/controls/SimulationClockDisplay";
-import { SimulationControls } from "@/components/controls/SimulationControls";
-import { LineList } from "@/components/network/LineList";
-import { StationDetailPanel } from "@/components/network/StationDetailPanel";
+import { TrainSimulationControls } from "@/components/trains/TrainSimulationControls";
+import { LineFilter } from "@/components/trains/LineFilter";
+import { TrainList } from "@/components/trains/TrainList";
+import { TrainDetails } from "@/components/trains/TrainDetails";
 
 export default function DashboardPage() {
-  const { lines, stations, tracks, interchanges, isLoading, error: networkError } = useNetwork();
+  const { lines, stations, tracks, isLoading, error: networkError } = useNetwork();
   const {
-    simulation,
+    state: simState,
     connectionStatus,
     isBusy,
-    error: simulationError,
+    error: simError,
     start,
     pause,
+    stop,
     reset,
-  } = useSimulationState();
+    setSpeed,
+  } = useTrainSimulation();
+  const { hiddenLineCodes, toggleLine } = useLineVisibility();
+
+  const [selectedTrainId, setSelectedTrainId] = useState<number | null>(null);
+  const [focusToken, setFocusToken] = useState(0);
+
+  const trains = simState?.trains ?? [];
+  const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
+
+  function selectTrain(id: number | null) {
+    setSelectedTrainId(id);
+    if (id != null) setFocusToken((t) => t + 1);
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
         <div>
           <h1 className="text-lg font-semibold">Namma Metro Simulation</h1>
-          <p className="text-xs text-slate-500">Graph-based network view</p>
+          <p className="text-xs text-slate-500">Live train scheduling and dispatch</p>
         </div>
         <ConnectionIndicator status={connectionStatus} />
       </header>
@@ -42,7 +58,13 @@ export default function DashboardPage() {
                 lines={lines}
                 stations={stations}
                 tracks={tracks}
+                trains={trains}
                 connectionStatus={connectionStatus}
+                hiddenLineCodes={hiddenLineCodes}
+                onToggleLine={toggleLine}
+                selectedTrainId={selectedTrainId}
+                onSelectTrain={selectTrain}
+                focusToken={focusToken}
               />
             </div>
           )}
@@ -50,29 +72,34 @@ export default function DashboardPage() {
 
         <div className="space-y-4">
           <Panel title="Simulation">
-            {simulationError && <p className="mb-2 text-sm text-red-400">{simulationError}</p>}
-            {simulation ? (
-              <div className="space-y-4">
-                <SimulationClockDisplay simulation={simulation} />
-                <SimulationControls
-                  simulation={simulation}
-                  onStart={start}
-                  onPause={pause}
-                  onReset={reset}
-                  isBusy={isBusy}
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">Loading simulation state…</p>
-            )}
+            {simError && <p className="mb-2 text-sm text-red-400">{simError}</p>}
+            <TrainSimulationControls
+              state={simState}
+              isBusy={isBusy}
+              onStart={start}
+              onPause={pause}
+              onStop={stop}
+              onReset={reset}
+              onSetSpeed={setSpeed}
+            />
           </Panel>
 
-          <Panel title="Network summary">
-            <StationDetailPanel stations={stations} interchanges={interchanges} />
+          <Panel title="Line filter">
+            <LineFilter lines={lines} hiddenLineCodes={hiddenLineCodes} onToggleLine={toggleLine} />
           </Panel>
 
-          <Panel title="Lines">
-            <LineList lines={lines} />
+          <Panel title="Trains">
+            <TrainList
+              trains={trains}
+              lines={lines}
+              hiddenLineCodes={hiddenLineCodes}
+              selectedTrainId={selectedTrainId}
+              onSelectTrain={selectTrain}
+            />
+          </Panel>
+
+          <Panel title="Train details">
+            <TrainDetails train={selectedTrain} lines={lines} stations={stations} />
           </Panel>
         </div>
       </main>

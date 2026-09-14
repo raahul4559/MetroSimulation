@@ -14,7 +14,13 @@ public record TrainStateResponse(
         double speedKmph,
         String status,
         int passengerCount,
-        int capacity
+        int capacity,
+        long scheduledDepartureSeconds,
+        int dwellTimeSeconds,
+        double maxSpeedKmph,
+        double accelerationMps2,
+        double brakingRateMps2,
+        int delaySeconds
 ) {
 
     public static TrainStateResponse from(TrainState train) {
@@ -30,7 +36,13 @@ public record TrainStateResponse(
                 train.speedKmph(),
                 train.status().name(),
                 train.passengerCount(),
-                train.capacity()
+                train.capacity(),
+                train.scheduledDepartureSeconds(),
+                train.dwellTimeSeconds(),
+                train.maxSpeedKmph(),
+                train.accelerationMps2(),
+                train.brakingRateMps2(),
+                train.heldSeconds()
         );
     }
 }

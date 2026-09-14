@@ -32,7 +32,15 @@ class TrainMovementTickHandlerTest {
     private static final ClockAdvanceHandler CLOCK = new ClockAdvanceHandler();
     private static final TrainMovementTickHandler MOVEMENT = new TrainMovementTickHandler();
 
-    /** A(1) -- 100m/10s --> B(2) -- 100m/10s --> C(3), one line, three stations. */
+    /** Reaches maxSpeed (10m/s) after 2s over 10m, cruises 80m, brakes symmetrically — chosen so a
+     * 100m track resolves in a clean, hand-verifiable 12 one-second ticks, with at least one tick
+     * of partial (neither zero nor max) speed observable on both the accel and brake ramps. */
+    private static final double MAX_SPEED_KMPH = 36.0;
+    private static final double ACCEL_MPS2 = 5.0;
+    private static final double BRAKE_MPS2 = 5.0;
+    private static final int DWELL_SECONDS = 30;
+
+    /** A(1) -- 100m --> B(2) -- 100m --> C(3), one line, three stations. */
     private static MetroNetwork threeStationNetwork() {
         Station a = new Station(1, "A", "Station A", new Coordinates(12.90, 77.50), List.of("L1"), StationType.TERMINAL, 30);
         Station b = new Station(2, "B", "Station B", new Coordinates(12.91, 77.51), List.of("L1"), StationType.REGULAR, 30);
@@ -48,7 +56,8 @@ class TrainMovementTickHandlerTest {
 
     private static TrainState trainAt(long id, String code, long stationId) {
         return new TrainState(id, code, "L1", TrainDirection.OUTBOUND, null, stationId, stationId,
-                0, 0, TrainStatus.AT_STATION, 0, 200, 0, 0);
+                0, 0, TrainStatus.AT_STATION, 0, 200, 0, 0,
+                0, DWELL_SECONDS, MAX_SPEED_KMPH, ACCEL_MPS2, BRAKE_MPS2);
     }
 
     private static SimulationState initialState(TrainState... trains) {
@@ -58,8 +67,8 @@ class TrainMovementTickHandlerTest {
     }
 
     private static TickContext contextFor(MetroNetwork network) {
-        // baseSimSecondsPerTick=5 matches a 10s track taking exactly 2 ticks to cross.
-        EngineSettings settings = new EngineSettings(5, 120, 60, 42);
+        // baseSimSecondsPerTick=1 gives fine-grained, easy-to-verify accel/cruise/brake integration.
+        EngineSettings settings = new EngineSettings(1, 120, 60, 42);
         return new TickContext(network, settings, new Random(42));
     }
 
@@ -78,8 +87,8 @@ class TrainMovementTickHandlerTest {
         List<SimulationEvent> events = new ArrayList<>();
 
         List<TrainState> observed = new ArrayList<>();
-        // AT_STATION -> DWELLING(30s => 6 ticks of 5s) -> DEPARTING -> RUNNING(10s track => 2 ticks) -> ARRIVING
-        for (int i = 0; i < 10; i++) {
+        // AT_STATION -> DWELLING (30 one-second ticks) -> DEPARTING -> RUNNING (12 ticks) -> ARRIVING
+        for (int i = 0; i < 45; i++) {
             state = tick(state, ctx, events);
             observed.add(state.trains().get(0));
         }
@@ -97,9 +106,12 @@ class TrainMovementTickHandlerTest {
             previousProgress = t.progress();
             previousStatus = t.status();
         }
-        // Proof it doesn't teleport: an intermediate progress value is actually observed mid-leg,
-        // not just the 0 (departed) and 1 (arrived) endpoints.
-        assertThat(observed).extracting(TrainState::progress).contains(0.5);
+        // Proof it doesn't teleport: real interior progress values are observed mid-leg, not just
+        // the 0 (departed) and 1 (arrived) endpoints.
+        assertThat(observed).anyMatch(t -> t.progress() > 0.0 && t.progress() < 1.0);
+        // And speed actually ramps up and back down rather than snapping to a flat average.
+        assertThat(observed).anyMatch(t -> t.speedKmph() > 0 && t.speedKmph() < MAX_SPEED_KMPH);
+        assertThat(observed).anyMatch(t -> t.speedKmph() == MAX_SPEED_KMPH);
     }
 
     @Test
@@ -110,7 +122,7 @@ class TrainMovementTickHandlerTest {
         List<SimulationEvent> events = new ArrayList<>();
 
         TrainStatus finalStatus = null;
-        for (int i = 0; i < 40 && finalStatus != TrainStatus.COMPLETED; i++) {
+        for (int i = 0; i < 200 && finalStatus != TrainStatus.COMPLETED; i++) {
             state = tick(state, ctx, events);
             finalStatus = state.trains().get(0).status();
         }
@@ -132,7 +144,7 @@ class TrainMovementTickHandlerTest {
         SimulationState state = initialState(trainAt(1, "T1", 1), trainAt(2, "T2", 1));
         List<SimulationEvent> events = new ArrayList<>();
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 32; i++) {
             state = tick(state, ctx, events);
         }
 
@@ -161,7 +173,7 @@ class TrainMovementTickHandlerTest {
         List<SimulationEvent> eventsA = new ArrayList<>();
         List<SimulationEvent> eventsB = new ArrayList<>();
 
-        for (int i = 0; i < 40; i++) {
+        for (int i = 0; i < 120; i++) {
             stateA = tick(stateA, ctxA, eventsA);
             stateB = tick(stateB, ctxB, eventsB);
             assertThat(stateA).isEqualTo(stateB);

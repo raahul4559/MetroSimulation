@@ -1,6 +1,7 @@
 package com.nammametro.simulation.trainsim.domain.model;
 
 public enum EventType {
+    DISPATCHED,
     DWELL_STARTED,
     DEPARTED,
     ARRIVED,

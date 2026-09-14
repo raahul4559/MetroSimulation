@@ -65,6 +65,19 @@ export function useMapViewport(viewport: { width: number; height: number }) {
   const zoomOut = useCallback(() => zoomByFactor(1 / BUTTON_ZOOM_FACTOR), [zoomByFactor]);
   const fitNetwork = useCallback(() => setTransform(IDENTITY_TRANSFORM), []);
 
+  /** Centers the viewport on a fixed world point at a given zoom (default: a close-in focus level). */
+  const focusOn = useCallback(
+    (point: ViewBoxPoint, scale = 3) => {
+      const nextScale = clampScale(scale);
+      setTransform({
+        scale: nextScale,
+        tx: viewport.width / 2 - nextScale * point.x,
+        ty: viewport.height / 2 - nextScale * point.y,
+      });
+    },
+    [viewport.width, viewport.height]
+  );
+
   const handlePointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -96,6 +109,7 @@ export function useMapViewport(viewport: { width: number; height: number }) {
     zoomIn,
     zoomOut,
     fitNetwork,
+    focusOn,
     panHandlers: {
       onPointerDown: handlePointerDown,
       onPointerMove: handlePointerMove,
