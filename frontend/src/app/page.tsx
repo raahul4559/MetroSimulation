@@ -16,6 +16,7 @@ import { DisruptionPanel } from "@/components/disruptions/DisruptionPanel";
 import { ActiveDisruptionsList } from "@/components/disruptions/ActiveDisruptionsList";
 import { DelayAnalyticsPanel } from "@/components/disruptions/DelayAnalyticsPanel";
 import { useDisruptions } from "@/hooks/useDisruptions";
+import { StationScene } from "@/components/station3d/StationScene";
 
 const EMPTY_PASSENGER_METRICS = {
   totalGenerated: 0,
@@ -45,6 +46,7 @@ export default function DashboardPage() {
 
   const [selectedTrainId, setSelectedTrainId] = useState<number | null>(null);
   const [focusToken, setFocusToken] = useState(0);
+  const [stationView3DId, setStationView3DId] = useState<number | null>(null);
 
   const trains = simState?.trains ?? [];
   const signals = simState?.signals ?? [];
@@ -53,6 +55,7 @@ export default function DashboardPage() {
   const disruptions = simState?.disruptions ?? [];
   const elapsedSeconds = simState?.clock.elapsedSimulationSeconds ?? 0;
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
+  const stationView3D = stations.find((s) => s.id === stationView3DId) ?? null;
 
   function selectTrain(id: number | null) {
     setSelectedTrainId(id);

@@ -65,15 +65,53 @@ export function useMapViewport(viewport: { width: number; height: number }) {
   const zoomOut = useCallback(() => zoomByFactor(1 / BUTTON_ZOOM_FACTOR), [zoomByFactor]);
   const fitNetwork = useCallback(() => setTransform(IDENTITY_TRANSFORM), []);
 
-  /** Centers the viewport on a fixed world point at a given zoom (default: a close-in focus level). */
+  const transformRef = useRef(transform);
+  useEffect(() => {
+    transformRef.current = transform;
+  }, [transform]);
+
+  /** Centers the viewport on a fixed world point at a given zoom (default: a close-in focus level).
+   * Snaps instantly unless `animate` is set (used for the station-3D "zoom in, then transition"
+   * sequence — a `requestAnimationFrame` tween since the transform is an SVG attribute, which CSS
+   * `transition` can't animate). */
   const focusOn = useCallback(
-    (point: ViewBoxPoint, scale = 3) => {
+    (
+      point: ViewBoxPoint,
+      scale = 3,
+      options?: { animate?: boolean; durationMs?: number; onComplete?: () => void }
+    ) => {
       const nextScale = clampScale(scale);
-      setTransform({
+      const target: ViewTransform = {
         scale: nextScale,
         tx: viewport.width / 2 - nextScale * point.x,
         ty: viewport.height / 2 - nextScale * point.y,
-      });
+      };
+
+      if (!options?.animate) {
+        setTransform(target);
+        options?.onComplete?.();
+        return;
+      }
+
+      const start = transformRef.current;
+      const duration = options.durationMs ?? 600;
+      const startTime = performance.now();
+
+      const step = (now: number) => {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setTransform({
+          scale: start.scale + (target.scale - start.scale) * eased,
+          tx: start.tx + (target.tx - start.tx) * eased,
+          ty: start.ty + (target.ty - start.ty) * eased,
+        });
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          options.onComplete?.();
+        }
+      };
+      requestAnimationFrame(step);
     },
     [viewport.width, viewport.height]
   );

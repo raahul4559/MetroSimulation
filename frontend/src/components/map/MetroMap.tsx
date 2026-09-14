@@ -33,6 +33,9 @@ interface MetroMapProps {
   selectedTrainId: number | null;
   onSelectTrain: (id: number | null) => void;
   focusToken: number;
+  /** Present only when the caller supports the 3D station view — offering it is optional so this
+   * component still works standalone (e.g. in isolation or a future embed) without it. */
+  onEnter3D?: (station: Station) => void;
 }
 
 /**
@@ -55,8 +58,10 @@ export function MetroMap({
   selectedTrainId,
   onSelectTrain,
   focusToken,
+  onEnter3D,
 }: MetroMapProps) {
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
+  const [enteringStation3D, setEnteringStation3D] = useState(false);
 
   const project = useMemo(() => buildProjector(stations, VIEWPORT), [stations]);
   const uniqueStations = useMemo(() => {
@@ -97,6 +102,19 @@ export function MetroMap({
   const deselectAll = () => {
     setSelectedStationId(null);
     onSelectTrain(null);
+  };
+
+  /** Zooms smoothly into the station first, then hands off to the 3D view once the zoom settles —
+   * the map itself never re-renders based on the 3D view (no shared canvas), so this animated
+   * hand-off is what makes the switch read as one continuous camera move instead of a page swap. */
+  const handleEnter3D = (station: Station) => {
+    if (!onEnter3D) return;
+    setEnteringStation3D(true);
+    focusOn(project(station), 5, {
+      animate: true,
+      durationMs: 700,
+      onComplete: () => onEnter3D(station),
+    });
   };
 
   return (
@@ -185,7 +203,14 @@ export function MetroMap({
           passengers={passengers}
           liveFeedStatus={connectionStatus}
           onClose={() => setSelectedStationId(null)}
+          onEnter3D={onEnter3D ? handleEnter3D : undefined}
         />
+      )}
+
+      {enteringStation3D && (
+        <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-slate-950/0 pb-6">
+          <span className="rounded-full bg-slate-900/90 px-3 py-1 text-xs text-slate-300 shadow-lg">Entering station…</span>
+        </div>
       )}
     </div>
   );

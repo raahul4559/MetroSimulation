@@ -21,6 +21,7 @@ interface StationPanelProps {
   passengers: readonly Passenger[];
   liveFeedStatus: ConnectionStatus;
   onClose: () => void;
+  onEnter3D?: (station: Station) => void;
 }
 
 const AT_STATION_STATUSES = new Set(["AT_STATION", "DWELLING"]);
@@ -44,6 +45,7 @@ export function StationPanel({
   passengers,
   liveFeedStatus,
   onClose,
+  onEnter3D,
 }: StationPanelProps) {
   const stationLines = getLinesForStation(station, lines);
   const neighbors = getNeighborStations(station, tracks, buildStationIndex(stations));
@@ -79,6 +81,16 @@ export function StationPanel({
         />
         <StatusBadge label="Operational" tone="positive" />
       </div>
+
+      {onEnter3D && (
+        <button
+          type="button"
+          onClick={() => onEnter3D(station)}
+          className="mb-4 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+        >
+          View in 3D
+        </button>
+      )}
 
       <Section title="Lines">
         <div className="flex flex-wrap gap-1.5">
