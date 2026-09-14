@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useNetwork } from "@/hooks/useNetwork";
 import { useTrainSimulation } from "@/hooks/useTrainSimulation";
@@ -79,7 +80,12 @@ export default function DashboardPage() {
           <h1 className="text-lg font-semibold">Namma Metro Simulation</h1>
           <p className="text-xs text-slate-500">Live train scheduling and dispatch</p>
         </div>
-        <ConnectionIndicator status={connectionStatus} />
+        <div className="flex items-center gap-3">
+          <Link href="/stations" className="text-xs text-slate-400 underline-offset-4 hover:text-slate-200 hover:underline">
+            Station Assets
+          </Link>
+          <ConnectionIndicator status={connectionStatus} />
+        </div>
       </header>
 
       <main className="grid flex-1 grid-cols-1 gap-4 p-4 md:p-6 lg:grid-cols-[1fr_300px]">

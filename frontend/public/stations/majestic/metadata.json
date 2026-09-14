@@ -1,0 +1,17 @@
+{
+  "id": "majestic",
+  "stationCode": "MAJESTIC",
+  "name": "Nadaprabhu Kempegowda Station (Majestic)",
+  "city": "Bengaluru",
+  "lines": ["PURPLE", "GREEN"],
+  "buildType": "UNDERGROUND",
+  "isInterchange": true,
+  "platformArrangement": "ISLAND",
+  "modelQualityIntent": "RECONSTRUCTED",
+  "assets": {
+    "model": "model.glb",
+    "environment": "environment.glb",
+    "textures": "textures/"
+  },
+  "referenceNotes": "The network's central underground interchange between the Purple and Green Lines, adjacent to the City Railway Station and KSR bus stand. Represents the UNDERGROUND + INTERCHANGE + complex-station case. Classification is well-documented public knowledge; exact concourse/platform geometry is an illustrative approximation, not as-built drawings."
+}

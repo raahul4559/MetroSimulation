@@ -1,0 +1,17 @@
+{
+  "id": "mg-road",
+  "stationCode": "MG_ROAD",
+  "name": "MG Road",
+  "city": "Bengaluru",
+  "lines": ["PURPLE"],
+  "buildType": "UNDERGROUND",
+  "isInterchange": false,
+  "platformArrangement": "ISLAND",
+  "modelQualityIntent": "RECONSTRUCTED",
+  "assets": {
+    "model": "model.glb",
+    "environment": "environment.glb",
+    "textures": "textures/"
+  },
+  "referenceNotes": "Underground Purple Line station beneath MG Road, adjacent to Cubbon Park. Represents the single-line UNDERGROUND case. High-confidence classification; detailing is an approximation."
+}

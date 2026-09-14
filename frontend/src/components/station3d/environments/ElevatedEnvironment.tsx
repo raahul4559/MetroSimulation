@@ -105,7 +105,7 @@ export function ElevatedEnvironment({ minX, maxX }: ElevatedEnvironmentProps) {
         <mesh
           key={i}
           position={[b.x, groundY + b.height / 2, b.z]}
-          material={buildingMaterials[b.materialIndex]}
+          material={buildingMaterials[b.materialIndex % buildingMaterials.length]!}
           castShadow
           receiveShadow
         >

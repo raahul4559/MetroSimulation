@@ -5,13 +5,18 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { CameraMode3D, StationLayout3D, TrainPhase3D, TrainVisual3D } from "@/domain/station3d";
+import type { StationBuildType } from "@/domain/stationConfig";
 import { trainPose3D } from "@/lib/station3d/position";
-import { MODULE_SPACING, PLATFORM_HALF_LENGTH } from "@/lib/station3d/constants";
+import { MODULE_SPACING, PLATFORM_HALF_LENGTH, TUNNEL_HEIGHT } from "@/lib/station3d/constants";
 
 interface CameraControllerProps {
   mode: CameraMode3D;
   layout: StationLayout3D;
   trains: readonly TrainVisual3D[];
+  /** An UNDERGROUND station's low tunnel ceiling needs its own, much tighter default framing —
+   * the generic elevated/at-grade OVERVIEW preset flies the camera above and outside the tunnel
+   * shell entirely, producing a black frame (no light source reaches outside the bore). */
+  buildType: StationBuildType;
   /** Bumped by the "Reset Camera" button — re-snaps the current mode's framing even if the mode
    * itself hasn't changed. */
   resetToken: number;
@@ -48,8 +53,9 @@ interface FramingPreset {
  * framing and stays on OrbitControls until a train actually appears; it never renders a "tracking
  * nothing" empty frame.
  */
-export function CameraController({ mode, layout, trains, resetToken }: CameraControllerProps) {
+export function CameraController({ mode, layout, trains, buildType, resetToken }: CameraControllerProps) {
   const { camera } = useThree();
+  const underground = buildType === "UNDERGROUND";
 
   const stationCenterX = ((layout.platforms.length - 1) * MODULE_SPACING) / 2;
   const firstModuleX = (layout.platforms[0]?.moduleIndex ?? 0) * MODULE_SPACING;
@@ -59,14 +65,19 @@ export function CameraController({ mode, layout, trains, resetToken }: CameraCon
 
   const framing = useMemo<FramingPreset>(() => {
     if (mode === "FREE") {
-      return { position: [stationCenterX - 10, 16, 34], target: [stationCenterX, 1, 0] };
+      return underground
+        ? { position: [stationCenterX - 6, 6.5, 20], target: [stationCenterX, 1.5, 0] }
+        : { position: [stationCenterX - 10, 16, 34], target: [stationCenterX, 1, 0] };
     }
     if (mode === "PASSENGER") {
       return { position: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4], target: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4 + 1] };
     }
-    // OVERVIEW, and FOLLOW while no train is actually visible to track yet.
-    return { position: [stationCenterX + 18, 28, 54], target: [stationCenterX, 2, 0] };
-  }, [mode, stationCenterX, firstModuleX]);
+    // OVERVIEW, and FOLLOW while no train is actually visible to track yet. Kept well under
+    // `TUNNEL_HEIGHT` underground so the establishing shot never ends up above the tunnel ceiling.
+    return underground
+      ? { position: [stationCenterX + 8, Math.min(7.5, TUNNEL_HEIGHT - 2), 26], target: [stationCenterX, 2.5, 0] }
+      : { position: [stationCenterX + 18, 28, 54], target: [stationCenterX, 2, 0] };
+  }, [mode, stationCenterX, firstModuleX, underground]);
 
   // React's own "adjust state during render" pattern (not a ref, not an effect — see
   // https://react.dev/reference/react/useState#storing-information-from-previous-renders):
@@ -102,7 +113,10 @@ export function CameraController({ mode, layout, trains, resetToken }: CameraCon
       enablePan={mode === "FREE"}
       enableZoom={mode !== "PASSENGER"}
       minDistance={mode === "PASSENGER" ? 0.5 : 8}
-      maxDistance={mode === "PASSENGER" ? 0.5 : mode === "FREE" ? 160 : 90}
+      maxDistance={
+        mode === "PASSENGER" ? 0.5 : mode === "FREE" ? (underground ? 42 : 160) : underground ? 34 : 90
+      }
+      minPolarAngle={underground ? Math.PI / 6 : 0}
       maxPolarAngle={Math.PI / 2.05}
     />
   );

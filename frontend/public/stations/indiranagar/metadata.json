@@ -1,0 +1,17 @@
+{
+  "id": "indiranagar",
+  "stationCode": "INDIRANAGAR",
+  "name": "Indiranagar",
+  "city": "Bengaluru",
+  "lines": ["PURPLE"],
+  "buildType": "ELEVATED",
+  "isInterchange": false,
+  "platformArrangement": "ISLAND",
+  "modelQualityIntent": "RECONSTRUCTED",
+  "assets": {
+    "model": "model.glb",
+    "environment": "environment.glb",
+    "textures": "textures/"
+  },
+  "referenceNotes": "Elevated Purple Line station on 100 Feet Road. Represents the single-line ELEVATED case (viaduct, columns, street-level context). High-confidence classification; detailing is an approximation."
+}

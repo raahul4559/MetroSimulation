@@ -1,0 +1,17 @@
+{
+  "id": "rv-road",
+  "stationCode": "RV_ROAD",
+  "name": "RV Road",
+  "city": "Bengaluru",
+  "lines": ["GREEN", "YELLOW"],
+  "buildType": "ELEVATED",
+  "isInterchange": true,
+  "platformArrangement": "ISLAND",
+  "modelQualityIntent": "RECONSTRUCTED",
+  "assets": {
+    "model": "model.glb",
+    "environment": "environment.glb",
+    "textures": "textures/"
+  },
+  "referenceNotes": "Elevated interchange between the Green Line and the fully-elevated Yellow Line. Represents the ELEVATED + INTERCHANGE case. High-confidence classification; concourse/transfer geometry is an approximation."
+}

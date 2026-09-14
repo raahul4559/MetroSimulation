@@ -5,6 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import type { Line, Station } from "@/domain/metro";
 import type { Passenger, SimulationClock, TrainState } from "@/domain/trainsim";
 import type { CameraMode3D } from "@/domain/station3d";
+import type { StationModelQuality } from "@/domain/stationConfig";
 import { buildStationLayout3D } from "@/lib/station3d/layout";
 import { findUpcomingTrainCode, selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
 import { formatDurationSeconds, formatOccupancyPercent } from "@/lib/metro/passengerDisplay";
@@ -50,6 +51,12 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
   const stationsById = useMemo(() => new Map(stations.map((s) => [s.id, s] as const)), [stations]);
   const lineByCode = useMemo(() => new Map(lines.map((l) => [l.code, l] as const)), [lines]);
   const layout = useMemo(() => buildStationLayout3D(station, lines, stationsById), [station, lines, stationsById]);
+  const config = useMemo(() => getStationConfig(station, lines), [station, lines]);
+  const platformDestinations = useMemo(
+    () => buildPlatformDestinations(layout.platforms, lines),
+    [layout.platforms, lines]
+  );
+  const atmosphere = useMemo(() => atmosphereFor(config.buildType), [config.buildType]);
 
   const trainVisuals = useMemo(() => {
     const platformsByLine = new Map(layout.platforms.map((p) => [p.lineCode, p] as const));
@@ -107,7 +114,7 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
     });
   }, [station.id]);
 
-  const gltfPath = useStationGLTFAvailability(station.code);
+  const asset = useStationAsset(config);
 
   const selectedTrain = trainVisuals.find((t) => t.trainId === selectedTrainId) ?? trainVisuals[0] ?? null;
   const selectedPlatform = selectedTrain ? layout.platforms.find((p) => p.lineCode === selectedTrain.lineCode) : layout.platforms[0];
@@ -131,24 +138,31 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
     <div className="relative h-full w-full overflow-hidden rounded-md bg-slate-950" onPointerDown={() => audioManager.ensureContext()}>
       <Canvas shadows camera={{ fov: 50, near: 0.1, far: 600 }} dpr={[1, 1.75]}>
         <Suspense fallback={null}>
-          <color attach="background" args={["#0b1120"]} />
-          <fog attach="fog" args={["#0b1120", 60, 220]} />
+          <color attach="background" args={[atmosphere.background]} />
+          <fog attach="fog" args={[atmosphere.background, atmosphere.fogNear, atmosphere.fogFar]} />
           <StationModel
             layout={layout}
             trains={trainVisuals}
             passengers={passengers}
+            asset={asset}
+            platformDestinations={platformDestinations}
             selectedTrainId={selectedTrainId}
             onSelectTrain={setSelectedTrainId}
           />
-          <CameraController mode={cameraMode} layout={layout} trains={trainVisuals} resetToken={resetToken} />
+          <CameraController
+            mode={cameraMode}
+            layout={layout}
+            trains={trainVisuals}
+            buildType={config.buildType}
+            resetToken={resetToken}
+          />
         </Suspense>
       </Canvas>
 
-      {!gltfPath && (
-        <span className="pointer-events-none absolute left-3 top-3 rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">
-          Simulated procedural station — no asset for {station.code}
-        </span>
-      )}
+      <span className="pointer-events-none absolute left-3 top-3 rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">
+        {config.buildType}
+        {config.isInterchange ? " · INTERCHANGE" : ""} · {qualityLabel(asset.quality)}
+      </span>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
         <div className="pointer-events-auto rounded-lg border border-slate-700 bg-slate-900/90 px-4 py-3 shadow-xl backdrop-blur">
@@ -299,6 +313,17 @@ export function StationScene({ station, lines, stations, trains, passengers, clo
       </div>
     </div>
   );
+}
+
+function qualityLabel(quality: StationModelQuality): string {
+  switch (quality) {
+    case "HIGH":
+      return "High fidelity";
+    case "RECONSTRUCTED":
+      return "Simplified reconstruction";
+    case "PROCEDURAL":
+      return "Procedural fallback";
+  }
 }
 
 function formatClockTime(iso: string): string {
