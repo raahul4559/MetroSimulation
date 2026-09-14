@@ -9,7 +9,8 @@ public record SimulationStateResponse(
         List<TrainStateResponse> trains,
         List<SignalResponse> signals,
         List<PassengerResponse> passengers,
-        PassengerMetricsResponse passengerMetrics
+        PassengerMetricsResponse passengerMetrics,
+        List<DisruptionResponse> disruptions
 ) {
 
     public static SimulationStateResponse from(SimulationState state) {
@@ -18,7 +19,8 @@ public record SimulationStateResponse(
                 state.trains().stream().map(TrainStateResponse::from).toList(),
                 state.signals().stream().map(SignalResponse::from).toList(),
                 state.passengers().stream().map(PassengerResponse::from).toList(),
-                PassengerMetricsResponse.from(state.passengerMetrics())
+                PassengerMetricsResponse.from(state.passengerMetrics()),
+                state.disruptions().stream().map(DisruptionResponse::from).toList()
         );
     }
 }

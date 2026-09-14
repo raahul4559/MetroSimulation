@@ -20,7 +20,10 @@ public record TrainStateResponse(
         double maxSpeedKmph,
         double accelerationMps2,
         double brakingRateMps2,
-        int delaySeconds
+        int delaySeconds,
+        Integer scheduledArrivalSeconds,
+        Integer actualArrivalSeconds,
+        Integer actualDepartureSeconds
 ) {
 
     public static TrainStateResponse from(TrainState train) {
@@ -42,7 +45,10 @@ public record TrainStateResponse(
                 train.maxSpeedKmph(),
                 train.accelerationMps2(),
                 train.brakingRateMps2(),
-                train.heldSeconds()
+                train.delaySeconds(),
+                train.scheduledArrivalSeconds(),
+                train.actualArrivalSeconds(),
+                train.actualDepartureSeconds()
         );
     }
 }
