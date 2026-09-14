@@ -44,7 +44,7 @@ class TrainDispatcherTest {
     private static TrainState scheduledTrainAt(long id, String code, long stationId, long scheduledDepartureSeconds) {
         return new TrainState(id, code, "L1", TrainDirection.OUTBOUND, null, stationId, stationId,
                 0, 0, TrainStatus.SCHEDULED, 0, 200, 0, 0,
-                scheduledDepartureSeconds, 30, 36.0, 10.0, 10.0);
+                scheduledDepartureSeconds, 30, 36.0, 10.0, 10.0, null, null, null, 0);
     }
 
     private static TickContext contextFor(MetroNetwork network) {

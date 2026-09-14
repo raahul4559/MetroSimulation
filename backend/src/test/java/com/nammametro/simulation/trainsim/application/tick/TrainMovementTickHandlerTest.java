@@ -61,7 +61,7 @@ class TrainMovementTickHandlerTest {
     private static TrainState trainAt(long id, String code, long stationId) {
         return new TrainState(id, code, "L1", TrainDirection.OUTBOUND, null, stationId, stationId,
                 0, 0, TrainStatus.AT_STATION, 0, 200, 0, 0,
-                0, DWELL_SECONDS, MAX_SPEED_KMPH, ACCEL_MPS2, BRAKE_MPS2);
+                0, DWELL_SECONDS, MAX_SPEED_KMPH, ACCEL_MPS2, BRAKE_MPS2, null, null, null, 0);
     }
 
     private static SimulationState initialState(TrainState... trains) {

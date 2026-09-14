@@ -105,7 +105,8 @@ public class LineScheduleAssembler {
                     origin.id(), origin.id(), 0, 0, TrainStatus.SCHEDULED,
                     0, schedule.capacity(), 0, 0,
                     departureSeconds, schedule.dwellTimeSeconds(), schedule.maxSpeedKmph(),
-                    schedule.accelerationMps2(), schedule.brakingRateMps2()));
+                    schedule.accelerationMps2(), schedule.brakingRateMps2(),
+                    null, null, null, 0));
         }
         return generated;
     }

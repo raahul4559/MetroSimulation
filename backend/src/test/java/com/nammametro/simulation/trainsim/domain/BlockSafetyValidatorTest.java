@@ -57,7 +57,7 @@ class BlockSafetyValidatorTest {
     private static TrainState trainAt(long id, String code, long stationId) {
         return new TrainState(id, code, "L1", TrainDirection.OUTBOUND, null, stationId, stationId,
                 0, 0, TrainStatus.AT_STATION, 0, 200, 0, 0,
-                0, 10, 36.0, 5.0, 5.0);
+                0, 10, 36.0, 5.0, 5.0, null, null, null, 0);
     }
 
     @Test

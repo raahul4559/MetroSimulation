@@ -1,17 +1,29 @@
 import type { ReactNode } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
+import type { Passenger, TrainState } from "@/domain/trainsim";
 import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
 import { buildStationIndex, getLinesForStation, getNeighborStations } from "@/lib/metro/selectors";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { OccupancyBar } from "@/components/ui/OccupancyBar";
+import {
+  DENSITY_LABEL,
+  DENSITY_TONE,
+  densityLevel,
+  getStationQueue,
+} from "@/lib/metro/passengerDisplay";
 
 interface StationPanelProps {
   station: Station;
   lines: readonly Line[];
   stations: readonly Station[];
   tracks: readonly Track[];
+  trains: readonly TrainState[];
+  passengers: readonly Passenger[];
   liveFeedStatus: ConnectionStatus;
   onClose: () => void;
 }
+
+const AT_STATION_STATUSES = new Set(["AT_STATION", "DWELLING"]);
 
 const TYPE_LABEL: Record<Station["stationType"], string> = {
   REGULAR: "Regular station",
@@ -28,11 +40,20 @@ export function StationPanel({
   lines,
   stations,
   tracks,
+  trains,
+  passengers,
   liveFeedStatus,
   onClose,
 }: StationPanelProps) {
   const stationLines = getLinesForStation(station, lines);
   const neighbors = getNeighborStations(station, tracks, buildStationIndex(stations));
+  const lineByCode = new Map(lines.map((line) => [line.code, line]));
+
+  const trainsHere = trains.filter(
+    (t) => t.previousStationId === station.id && AT_STATION_STATUSES.has(t.status)
+  );
+  const queue = getStationQueue(passengers, station.id);
+  const density = densityLevel(queue.length);
 
   return (
     <div className="pointer-events-auto absolute inset-x-2 bottom-2 top-auto max-h-[65%] w-auto overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 p-4 shadow-xl backdrop-blur md:inset-auto md:top-16 md:right-3 md:bottom-3 md:w-80 md:max-h-none">
@@ -99,15 +120,41 @@ export function StationPanel({
       </Section>
 
       <Section title="Current trains">
-        <p className="text-xs italic text-slate-500">
-          Live train tracking isn&apos;t implemented yet.
-        </p>
+        {trainsHere.length === 0 ? (
+          <p className="text-xs text-slate-500">No trains currently at this station.</p>
+        ) : (
+          <ul className="space-y-2">
+            {trainsHere.map((train) => (
+              <li key={train.id} className="text-xs">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: lineByCode.get(train.lineCode)?.colorHex ?? "#94a3b8" }}
+                      aria-hidden
+                    />
+                    <span className="font-mono font-medium text-slate-100">{train.code}</span>
+                  </span>
+                  <span className="text-slate-500">{train.status === "DWELLING" ? "Boarding" : "At platform"}</span>
+                </div>
+                <OccupancyBar count={train.passengerCount} capacity={train.capacity} compact />
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
-      <Section title="Passenger count">
-        <p className="text-xs italic text-slate-500">
-          Passenger data isn&apos;t tracked yet.
-        </p>
+      <Section title="Passenger queue">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs text-slate-300">{queue.length} waiting</span>
+          <StatusBadge label={DENSITY_LABEL[density]} tone={DENSITY_TONE[density]} />
+        </div>
+        {queue.length > 0 && (
+          <p className="text-xs text-slate-500">
+            {queue.filter((p) => p.status === "TRANSFER").length} transferring ·{" "}
+            {queue.filter((p) => p.status === "WAITING").length} first boarding
+          </p>
+        )}
       </Section>
 
       <Section title="Data feed" last>

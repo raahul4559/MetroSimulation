@@ -4,11 +4,16 @@ import com.nammametro.simulation.domain.model.SimulationStatus;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.analytics.AnalyticsRecorder;
 import com.nammametro.simulation.trainsim.application.tick.ClockAdvanceHandler;
+import com.nammametro.simulation.trainsim.application.tick.DisruptionEffectsHandler;
 import com.nammametro.simulation.trainsim.application.tick.PassengerBoardingHandler;
 import com.nammametro.simulation.trainsim.application.tick.PassengerDemandGenerationHandler;
 import com.nammametro.simulation.trainsim.application.tick.TrainDispatcher;
 import com.nammametro.simulation.trainsim.application.tick.TrainMovementTickHandler;
 import com.nammametro.simulation.trainsim.domain.BlockSafetyValidator;
+import com.nammametro.simulation.trainsim.domain.model.Disruption;
+import com.nammametro.simulation.trainsim.domain.model.DisruptionSeverity;
+import com.nammametro.simulation.trainsim.domain.model.DisruptionStatus;
+import com.nammametro.simulation.trainsim.domain.model.DisruptionType;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationEvent;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
@@ -22,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -40,7 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@code TrainMovementTickHandlerTest} for a test that pins this down.
  */
 @Service
-public class TrainSimulationEngine implements TrainSimulationControlUseCase {
+public class TrainSimulationEngine implements TrainSimulationControlUseCase, DisruptionManagementUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(TrainSimulationEngine.class);
 
@@ -49,12 +55,14 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
     private final TrainSimulationEventPublisher eventPublisher;
     private final AnalyticsRecorder analyticsRecorder;
     private final List<TickHandler> pipeline =
-            List.of(new ClockAdvanceHandler(), new TrainDispatcher(), new PassengerDemandGenerationHandler(),
-                    new PassengerBoardingHandler(), new TrainMovementTickHandler());
+            List.of(new ClockAdvanceHandler(), new DisruptionEffectsHandler(), new TrainDispatcher(),
+                    new PassengerDemandGenerationHandler(), new PassengerBoardingHandler(),
+                    new TrainMovementTickHandler());
 
     private final AtomicReference<SimulationState> state;
     private final AtomicReference<LineScheduleAssembler.Assembled> assembled;
     private final AtomicReference<Random> random;
+    private final AtomicLong disruptionIdSequence = new AtomicLong(1);
 
     public TrainSimulationEngine(MetroNetwork network, LineScheduleAssembler assembler,
                              TrainSimulationEventPublisher eventPublisher, AnalyticsRecorder analyticsRecorder) {
@@ -101,6 +109,7 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
         assembled.set(fresh);
         random.set(new Random(fresh.settings().randomSeed()));
         state.set(fresh.initialState());
+        disruptionIdSequence.set(1);
         analyticsRecorder.reset();
         analyticsRecorder.record(fresh.initialState());
         eventPublisher.publishState(fresh.initialState());
@@ -110,6 +119,41 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
     @Override
     public SimulationState setSpeed(SimulationSpeed speed) {
         return state.updateAndGet(s -> s.withClock(s.clock().withSpeed(speed)));
+    }
+
+    @Override
+    public List<Disruption> listDisruptions() {
+        return state.get().disruptions();
+    }
+
+    /** A created disruption always starts {@code SCHEDULED} at the current simulated time — the
+     * very next tick's {@code DisruptionEffectsHandler} flips it {@code ACTIVE} and emits
+     * {@code DISRUPTION_STARTED} through the normal tick-event pipeline, rather than this method
+     * publishing an event itself outside that single pathway. */
+    @Override
+    public Disruption createDisruption(DisruptionType type, long resourceId, int durationSeconds,
+                                        DisruptionSeverity severity, int magnitudeSeconds, String description) {
+        long id = disruptionIdSequence.getAndIncrement();
+        long nowSeconds = state.get().clock().elapsedSimulationSeconds();
+        Disruption disruption = new Disruption(id, type, Disruption.resourceTypeFor(type), resourceId, nowSeconds,
+                durationSeconds, magnitudeSeconds, severity, description, DisruptionStatus.SCHEDULED);
+
+        state.updateAndGet(s -> {
+            List<Disruption> updated = new ArrayList<>(s.disruptions());
+            updated.add(disruption);
+            return s.withDisruptions(updated);
+        });
+        return disruption;
+    }
+
+    @Override
+    public void cancelDisruption(long id) {
+        state.updateAndGet(s -> {
+            List<Disruption> updated = s.disruptions().stream()
+                    .map(d -> d.id() == id ? d.withStatus(DisruptionStatus.CANCELLED) : d)
+                    .toList();
+            return s.withDisruptions(updated);
+        });
     }
 
     @Scheduled(fixedDelayString = "${simulation.tick-interval-ms:1000}")

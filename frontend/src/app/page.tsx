@@ -11,6 +11,16 @@ import { TrainSimulationControls } from "@/components/trains/TrainSimulationCont
 import { LineFilter } from "@/components/trains/LineFilter";
 import { TrainList } from "@/components/trains/TrainList";
 import { TrainDetails } from "@/components/trains/TrainDetails";
+import { PassengerMetricsPanel } from "@/components/trains/PassengerMetricsPanel";
+
+const EMPTY_PASSENGER_METRICS = {
+  totalGenerated: 0,
+  totalServed: 0,
+  totalUnableToBoard: 0,
+  averageWaitSeconds: 0,
+  averageTravelSeconds: 0,
+  averageJourneySeconds: 0,
+};
 
 export default function DashboardPage() {
   const { lines, stations, tracks, isLoading, error: networkError } = useNetwork();
@@ -32,6 +42,8 @@ export default function DashboardPage() {
 
   const trains = simState?.trains ?? [];
   const signals = simState?.signals ?? [];
+  const passengers = simState?.passengers ?? [];
+  const passengerMetrics = simState?.passengerMetrics ?? EMPTY_PASSENGER_METRICS;
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
 
   function selectTrain(id: number | null) {
@@ -61,6 +73,7 @@ export default function DashboardPage() {
                 tracks={tracks}
                 trains={trains}
                 signals={signals}
+                passengers={passengers}
                 connectionStatus={connectionStatus}
                 hiddenLineCodes={hiddenLineCodes}
                 onToggleLine={toggleLine}
@@ -88,6 +101,14 @@ export default function DashboardPage() {
 
           <Panel title="Line filter">
             <LineFilter lines={lines} hiddenLineCodes={hiddenLineCodes} onToggleLine={toggleLine} />
+          </Panel>
+
+          <Panel title="Passengers">
+            <PassengerMetricsPanel
+              metrics={passengerMetrics}
+              waitingNow={passengers.filter((p) => p.status === "WAITING" || p.status === "TRANSFER").length}
+              onTrainNow={passengers.filter((p) => p.status === "ON_TRAIN" || p.status === "BOARDING").length}
+            />
           </Panel>
 
           <Panel title="Trains">

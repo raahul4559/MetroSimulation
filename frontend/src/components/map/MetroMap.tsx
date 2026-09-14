@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
-import type { Passenger, PassengerMetrics, Signal, TrainState } from "@/domain/trainsim";
+import type { Passenger, Signal, TrainState } from "@/domain/trainsim";
 import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
 import { buildProjector } from "@/lib/geometry/projection";
 import { viewBoxString } from "@/lib/geometry/layout";
@@ -27,7 +27,6 @@ interface MetroMapProps {
   trains: readonly TrainState[];
   signals: readonly Signal[];
   passengers: readonly Passenger[];
-  passengerMetrics: PassengerMetrics;
   connectionStatus: ConnectionStatus;
   hiddenLineCodes: ReadonlySet<string>;
   onToggleLine: (code: string) => void;
@@ -50,7 +49,6 @@ export function MetroMap({
   trains,
   signals,
   passengers,
-  passengerMetrics,
   connectionStatus,
   hiddenLineCodes,
   onToggleLine,
@@ -183,6 +181,8 @@ export function MetroMap({
           lines={lines}
           stations={uniqueStations}
           tracks={tracks}
+          trains={trains}
+          passengers={passengers}
           liveFeedStatus={connectionStatus}
           onClose={() => setSelectedStationId(null)}
         />

@@ -48,7 +48,9 @@ public class TrainDispatcher implements TickHandler {
                     train.previousStationId(), train.previousStationId(), 0, 0, TrainStatus.AT_STATION,
                     train.passengerCount(), train.capacity(), 0, 0,
                     train.scheduledDepartureSeconds(), train.dwellTimeSeconds(), train.maxSpeedKmph(),
-                    train.accelerationMps2(), train.brakingRateMps2());
+                    train.accelerationMps2(), train.brakingRateMps2(),
+                    train.scheduledArrivalSeconds(), train.actualArrivalSeconds(), train.actualDepartureSeconds(),
+                    train.delaySeconds());
             updated.add(dispatched);
             events.add(new SimulationEvent(tick, simTime, EventType.DISPATCHED, train.id(), train.code(),
                     train.previousStationId(), "%s dispatched into service".formatted(train.code())));

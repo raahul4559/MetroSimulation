@@ -50,7 +50,8 @@ class PassengerBoardingHandlerTest {
 
     private static TrainState atStation(long id, long stationId, int passengerCount, int capacity) {
         return new TrainState(id, "T" + id, "L1", TrainDirection.OUTBOUND, null, stationId, stationId,
-                0, 0, TrainStatus.AT_STATION, passengerCount, capacity, 0, 0, 0, 30, 36.0, 1.0, 1.2);
+                0, 0, TrainStatus.AT_STATION, passengerCount, capacity, 0, 0, 0, 30, 36.0, 1.0, 1.2,
+                null, null, null, 0);
     }
 
     private static Passenger waiting(long id, long stationId, long destinationStationId, List<Long> route, int routeIndex) {
@@ -120,7 +121,7 @@ class PassengerBoardingHandlerTest {
         // Second call (simulating the next tick): the train is no longer AT_STATION (it's since departed),
         // but the leftover BOARDING passenger still resolves to ON_TRAIN.
         TrainState departed = new TrainState(100, "T100", "L1", TrainDirection.OUTBOUND, 1L, A, B,
-                0.1, 10, TrainStatus.RUNNING, 1, 10, 0, 0, 0, 30, 36.0, 1.0, 1.2);
+                0.1, 10, TrainStatus.RUNNING, 1, 10, 0, 0, 0, 30, 36.0, 1.0, 1.2, null, null, null, 0);
         SimulationState secondTickInput = new SimulationState(afterFirstTick.clock(), List.of(departed), List.of(),
                 afterFirstTick.passengers(), afterFirstTick.passengerMetrics(), List.of());
         SimulationState afterSecondTick = HANDLER.handle(secondTickInput, contextFor(network)).state();

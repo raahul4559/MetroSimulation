@@ -22,9 +22,17 @@ import com.nammametro.simulation.domain.model.TrainDirection;
  * flat distance-over-time average.
  *
  * <p>{@code dwellRemainingSeconds} and {@code heldSeconds} are implementation state the tick
- * handler needs (dwell countdown; how long a train has been held for headway, i.e. its current
- * delay) — not part of the spec's literal field list, but required to make dwelling and headway
- * deterministic and resumable.
+ * handler needs (dwell countdown; how long a train has been held for headway) — not part of the
+ * spec's literal field list, but required to make dwelling and headway deterministic and
+ * resumable.
+ *
+ * <p>{@code scheduledArrivalSeconds}/{@code actualArrivalSeconds} and
+ * {@code scheduledDepartureSeconds}/{@code actualDepartureSeconds} are a nominal timetable
+ * projected forward from nominal leg/dwell durations (see {@code TrainMovementTickHandler}'s
+ * departure/arrival transitions) versus what really happened — never adjusted by disruptions
+ * themselves, so a hold or extended dwell shows up as growing {@code delaySeconds} rather than
+ * quietly resetting the baseline. {@code delaySeconds} is recomputed live every tick (not just at
+ * arrival/departure) so a train sitting blocked shows growing delay in real time.
  */
 public record TrainState(
         long id,
@@ -45,7 +53,11 @@ public record TrainState(
         int dwellTimeSeconds,
         double maxSpeedKmph,
         double accelerationMps2,
-        double brakingRateMps2
+        double brakingRateMps2,
+        Integer scheduledArrivalSeconds,
+        Integer actualArrivalSeconds,
+        Integer actualDepartureSeconds,
+        int delaySeconds
 ) {
 
     /** Used by {@code PassengerBoardingHandler} to record alighting/boarding deltas — every other
@@ -53,6 +65,29 @@ public record TrainState(
     public TrainState withPassengerCount(int newPassengerCount) {
         return new TrainState(id, code, lineCode, direction, currentTrackId, previousStationId, nextStationId,
                 progress, speedKmph, status, newPassengerCount, capacity, dwellRemainingSeconds, heldSeconds,
-                scheduledDepartureSeconds, dwellTimeSeconds, maxSpeedKmph, accelerationMps2, brakingRateMps2);
+                scheduledDepartureSeconds, dwellTimeSeconds, maxSpeedKmph, accelerationMps2, brakingRateMps2,
+                scheduledArrivalSeconds, actualArrivalSeconds, actualDepartureSeconds, delaySeconds);
+    }
+
+    /** Updates the nominal-vs-actual schedule fields — called at the two real transitions
+     * (departure, arrival) in {@code TrainMovementTickHandler}, and by its per-tick live
+     * {@code delaySeconds} recompute. Every other field is untouched. */
+    public TrainState withScheduleUpdate(long newScheduledDepartureSeconds, Integer newScheduledArrivalSeconds,
+                                          Integer newActualArrivalSeconds, Integer newActualDepartureSeconds,
+                                          int newDelaySeconds) {
+        return new TrainState(id, code, lineCode, direction, currentTrackId, previousStationId, nextStationId,
+                progress, speedKmph, status, passengerCount, capacity, dwellRemainingSeconds, heldSeconds,
+                newScheduledDepartureSeconds, dwellTimeSeconds, maxSpeedKmph, accelerationMps2, brakingRateMps2,
+                newScheduledArrivalSeconds, newActualArrivalSeconds, newActualDepartureSeconds, newDelaySeconds);
+    }
+
+    /** Used by {@code TrainMovementTickHandler} to freeze a train a disruption is holding in
+     * place (a blocked block, a failed/manually-delayed train) without disturbing its position,
+     * status, or dwell/held counters — every other field is untouched. */
+    public TrainState withSpeed(double newSpeedKmph) {
+        return new TrainState(id, code, lineCode, direction, currentTrackId, previousStationId, nextStationId,
+                progress, newSpeedKmph, status, passengerCount, capacity, dwellRemainingSeconds, heldSeconds,
+                scheduledDepartureSeconds, dwellTimeSeconds, maxSpeedKmph, accelerationMps2, brakingRateMps2,
+                scheduledArrivalSeconds, actualArrivalSeconds, actualDepartureSeconds, delaySeconds);
     }
 }
