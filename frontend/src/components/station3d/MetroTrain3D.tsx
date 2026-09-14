@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PlatformLayout3D, TrainVisual3D } from "@/domain/station3d";
 import { trainPose3D } from "@/lib/station3d/position";
-import { TRAIN_CARS, TRAIN_CAR_LENGTH, TRAIN_HEIGHT, TRAIN_LENGTH, TRAIN_WIDTH } from "@/lib/station3d/constants";
+import { TRAIN_CAR_LENGTH, TRAIN_HEIGHT, TRAIN_LENGTH, TRAIN_WIDTH } from "@/lib/station3d/constants";
 import { trainCarCenters } from "@/lib/station3d/trainLayout";
 
 interface MetroTrain3DProps {

@@ -27,6 +27,15 @@ const EMPTY_PASSENGER_METRICS = {
   averageJourneySeconds: 0,
 };
 
+const EMPTY_CLOCK = {
+  startTime: new Date(0).toISOString(),
+  currentTime: new Date(0).toISOString(),
+  status: "STOPPED" as const,
+  speed: 1,
+  currentTick: 0,
+  elapsedSimulationSeconds: 0,
+};
+
 export default function DashboardPage() {
   const { lines, stations, tracks, isLoading, error: networkError } = useNetwork();
   const {
@@ -53,7 +62,8 @@ export default function DashboardPage() {
   const passengers = simState?.passengers ?? [];
   const passengerMetrics = simState?.passengerMetrics ?? EMPTY_PASSENGER_METRICS;
   const disruptions = simState?.disruptions ?? [];
-  const elapsedSeconds = simState?.clock.elapsedSimulationSeconds ?? 0;
+  const clock = simState?.clock ?? EMPTY_CLOCK;
+  const elapsedSeconds = clock.elapsedSimulationSeconds;
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
   const stationView3D = stations.find((s) => s.id === stationView3DId) ?? null;
 
@@ -88,6 +98,7 @@ export default function DashboardPage() {
                   stations={stations}
                   trains={trains}
                   passengers={passengers}
+                  clock={clock}
                   onBack={() => setStationView3DId(null)}
                 />
               ) : (

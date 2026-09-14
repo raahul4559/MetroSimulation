@@ -1,5 +1,5 @@
 import type { Line, Station } from "@/domain/metro";
-import type { TrainState } from "@/domain/trainsim";
+import type { TrainDirection, TrainState } from "@/domain/trainsim";
 import type { PlatformLayout3D, TrainPhase3D, TrainVisual3D } from "@/domain/station3d";
 import { APPROACH_VISIBLE_FROM, DEPART_VISIBLE_TO } from "./constants";
 
@@ -105,4 +105,26 @@ function nextStationNameFor(train: TrainState, platform: PlatformLayout3D, stati
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+/** The next real train (by real status/`nextStationId`) heading into this exact station on this
+ * line/direction, besides the one already showing at the platform — for the info panel's "Next
+ * train" line. Deliberately doesn't estimate an ETA: nothing in `TrainState` gives a trustworthy
+ * time-to-arrival for a leg the train hasn't started yet, so this only ever reports which real train
+ * is next, picking whichever candidate is furthest along its current leg (closest to arriving). */
+export function findUpcomingTrainCode(
+  trains: readonly TrainState[],
+  stationId: number,
+  lineCode: string,
+  direction: TrainDirection,
+  excludeTrainId: number
+): string | null {
+  let best: TrainState | null = null;
+  for (const t of trains) {
+    if (t.id === excludeTrainId || t.lineCode !== lineCode || t.direction !== direction) continue;
+    if (t.nextStationId !== stationId || t.previousStationId === stationId) continue;
+    if (t.status !== "RUNNING" && t.status !== "DELAYED" && t.status !== "DEPARTING") continue;
+    if (!best || t.progress > best.progress) best = t;
+  }
+  return best?.code ?? null;
 }

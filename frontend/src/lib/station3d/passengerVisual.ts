@@ -45,14 +45,14 @@ export function resolveStationPassengers3D(
       // Only ever a boarding target while the doors are actually open — a train mid-approach or
       // already departing never produces a boarding visual, so nobody walks toward a closed door.
       if (!train || train.phase !== "BOARDING") continue;
-      visuals.push(doorVisual(p.id, "BOARDING", train.direction, platform));
+      visuals.push(doorVisual(p.id, "BOARDING", train.direction));
       continue;
     }
 
     if ((p.status === "WAITING" || p.status === "TRANSFER") && p.currentStationId === stationId) {
       const direction = matchDirection(p, stationId, platform, +1);
       if (!direction) continue;
-      visuals.push(waitingVisual(p.id, direction, platform));
+      visuals.push(waitingVisual(p.id, direction));
       continue;
     }
 
@@ -63,7 +63,7 @@ export function resolveStationPassengers3D(
       // `trainsHere` always reflects the live simulation state, so this is never assumed.
       const trainOpenThisWay = trainsHere.some((t) => t.direction === direction && t.phase === "BOARDING");
       if (!trainOpenThisWay) continue;
-      visuals.push(doorVisual(p.id, "ALIGHTING", direction, platform));
+      visuals.push(doorVisual(p.id, "ALIGHTING", direction));
     }
   }
 
@@ -89,22 +89,17 @@ function matchDirection(
   return null;
 }
 
-function waitingVisual(passengerId: number, direction: TrainDirection, platform: PlatformLayout3D): PassengerVisual3D {
+function waitingVisual(passengerId: number, direction: TrainDirection): PassengerVisual3D {
   const sign = direction === "OUTBOUND" ? 1 : -1;
   const targetX = sign * (PLATFORM_WIDTH / 2 - WAITING_EDGE_INSET);
   const targetZ = scatterZ(passengerId);
   return { passengerId, phase: "WAITING", direction, targetX, targetZ };
 }
 
-function doorVisual(
-  passengerId: number,
-  phase: "BOARDING" | "ALIGHTING",
-  direction: TrainDirection,
-  platform: PlatformLayout3D
-): PassengerVisual3D {
+function doorVisual(passengerId: number, phase: "BOARDING" | "ALIGHTING", direction: TrainDirection): PassengerVisual3D {
   const sign = direction === "OUTBOUND" ? 1 : -1;
   const targetX = sign * (PLATFORM_WIDTH / 2 - DOOR_EDGE_INSET);
-  const targetZ = carCenters[passengerId % carCenters.length];
+  const targetZ = carCenters[passengerId % carCenters.length] ?? 0;
   return { passengerId, phase, direction, targetX, targetZ };
 }
 

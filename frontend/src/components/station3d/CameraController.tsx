@@ -42,12 +42,20 @@ interface FramingPreset {
  * previous-render comparison, React's own sanctioned "adjust state during render" pattern, so it
  * only fires on an actual mode/reset change and never on a re-render from live train data), not in
  * a `useEffect` whose ordering relative to the child `OrbitControls`' own mount isn't guaranteed.
+ *
+ * <p>FOLLOW with no train currently visible at this station (caught in the same manual testing —
+ * the camera was left stranded wherever a *previous* mode had put it) falls back to the OVERVIEW
+ * framing and stays on OrbitControls until a train actually appears; it never renders a "tracking
+ * nothing" empty frame.
  */
 export function CameraController({ mode, layout, trains, resetToken }: CameraControllerProps) {
   const { camera } = useThree();
 
   const stationCenterX = ((layout.platforms.length - 1) * MODULE_SPACING) / 2;
   const firstModuleX = (layout.platforms[0]?.moduleIndex ?? 0) * MODULE_SPACING;
+
+  const followTarget = useMemo(() => pickFollowTrain(trains), [trains]);
+  const isTrackingTrain = mode === "FOLLOW" && followTarget != null;
 
   const framing = useMemo<FramingPreset>(() => {
     if (mode === "FREE") {
@@ -56,26 +64,25 @@ export function CameraController({ mode, layout, trains, resetToken }: CameraCon
     if (mode === "PASSENGER") {
       return { position: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4], target: [firstModuleX + 2, 1.7, -PLATFORM_HALF_LENGTH * 0.4 + 1] };
     }
-    // OVERVIEW and FOLLOW (FOLLOW never renders OrbitControls, but still needs a harmless default).
+    // OVERVIEW, and FOLLOW while no train is actually visible to track yet.
     return { position: [stationCenterX + 18, 28, 54], target: [stationCenterX, 2, 0] };
   }, [mode, stationCenterX, firstModuleX]);
 
   // React's own "adjust state during render" pattern (not a ref, not an effect — see
   // https://react.dev/reference/react/useState#storing-information-from-previous-renders):
-  // applies the new framing's camera position exactly once per mode/reset change, synchronously
-  // before `OrbitControls` (a child) constructs, and never on a re-render from live train data.
-  const framingKey = `${mode}-${resetToken}`;
+  // applies the new framing's camera position exactly once per mode/reset/tracking-state change,
+  // synchronously before `OrbitControls` (a child) constructs, and never on a re-render from live
+  // train data alone. Skipped when we're *entering* real train-tracking — letting the follow lerp
+  // pull the camera in from wherever OrbitControls left it reads better than a hard snap.
+  const framingKey = `${mode}-${resetToken}-${isTrackingTrain ? "tracking" : "idle"}`;
   const [appliedKey, setAppliedKey] = useState<string | null>(null);
   if (appliedKey !== framingKey) {
     setAppliedKey(framingKey);
-    camera.position.set(...framing.position);
+    if (!isTrackingTrain) camera.position.set(...framing.position);
   }
 
-  const followTarget = useMemo(() => pickFollowTrain(trains), [trains]);
-
   useFrame(() => {
-    if (mode !== "FOLLOW") return;
-    if (!followTarget) return;
+    if (!isTrackingTrain || !followTarget) return;
     const platform = layout.platforms.find((p) => p.lineCode === followTarget.lineCode);
     if (!platform) return;
 
@@ -86,7 +93,7 @@ export function CameraController({ mode, layout, trains, resetToken }: CameraCon
     camera.lookAt(pose.x, 1.6, pose.z);
   });
 
-  if (mode === "FOLLOW") return null;
+  if (isTrackingTrain) return null;
 
   return (
     <OrbitControls
