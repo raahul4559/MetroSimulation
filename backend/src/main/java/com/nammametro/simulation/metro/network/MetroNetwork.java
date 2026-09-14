@@ -62,6 +62,10 @@ public class MetroNetwork {
         return Optional.ofNullable(linesById.get(id));
     }
 
+    public Optional<Line> findLineByCode(String code) {
+        return lines.stream().filter(l -> l.code().equals(code)).findFirst();
+    }
+
     /** Stations directly reachable from {@code stationId} by a single track. */
     public List<Station> findNeighbors(long stationId) {
         return tracksIncidentTo(stationId).stream()
@@ -108,6 +112,11 @@ public class MetroNetwork {
                                 .flatMap(Optional::stream)
                                 .toList()))
                 .toList();
+    }
+
+    /** The single track connecting two adjacent stations, if any — validated to be at most one. */
+    public Optional<Track> getSingleTrackBetween(long stationIdA, long stationIdB) {
+        return getTracksBetween(stationIdA, stationIdB).stream().findFirst();
     }
 
     /**
@@ -209,9 +218,5 @@ public class MetroNetwork {
         long a = Math.min(track.fromStationId(), track.toStationId());
         long b = Math.max(track.fromStationId(), track.toStationId());
         return a + ":" + b;
-    }
-
-    private Optional<Line> findLineByCode(String code) {
-        return lines.stream().filter(l -> l.code().equals(code)).findFirst();
     }
 }

@@ -17,6 +17,6 @@ build-frontend:
 
 verify:
 	@echo "Backend health:" && curl -sf http://localhost:8080/actuator/health && echo
-	@echo "Simulation clock lines:" && curl -sf http://localhost:8080/api/v1/network/lines | head -c 200 && echo
 	@echo "Metro network graph:" && curl -sf http://localhost:8080/api/metro/network | head -c 200 && echo
+	@echo "Train simulation state:" && curl -sf http://localhost:8080/api/simulation/state | head -c 200 && echo
 	@echo "Frontend:" && curl -sf -o /dev/null -w "%{http_code}\n" http://localhost:3000

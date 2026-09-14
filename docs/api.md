@@ -1,11 +1,14 @@
 # API reference
 
-Two independent base URLs on the same backend — see `docs/architecture.md` for why they're split:
+Three independent base URLs on the same backend — see `docs/architecture.md` for why they're split:
 
-- `http://localhost:8080/api/v1` — the simulation clock (Postgres-backed). Override with
-  `NEXT_PUBLIC_API_BASE_URL` on the frontend, `SERVER_PORT`/`CORS_ALLOWED_ORIGINS` on the backend.
+- `http://localhost:8080/api/v1` — the legacy tick-only clock (Postgres-backed, kept for reference).
+  Override with `NEXT_PUBLIC_API_BASE_URL` on the frontend, `SERVER_PORT`/`CORS_ALLOWED_ORIGINS` on
+  the backend.
 - `http://localhost:8080/api/metro` — the network graph and routing (JSON-dataset-backed). Override
   with `NEXT_PUBLIC_METRO_API_BASE_URL`.
+- `http://localhost:8080/api/simulation` — the discrete-time train simulation engine (Postgres roster
+  + config, `metro`'s graph for topology). No frontend env var yet — not wired into the UI this chunk.
 
 ## REST — simulation clock (`/api/v1`)
 
@@ -49,6 +52,28 @@ curl "http://localhost:8080/api/metro/route?from=9&to=5"
 #  "totalDistanceMetres":24800,"totalTravelTimeSeconds":2627}
 ```
 
+## REST — discrete-time train simulation (`/api/simulation`)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/start` | Set status to `RUNNING` (also resumes from `PAUSED`/`STOPPED`). |
+| POST | `/pause` | Freeze the clock at the current tick; state is preserved for `/start` to resume. |
+| POST | `/stop` | Halt the clock (distinct status from `PAUSED`, same effect on the tick loop); state preserved. |
+| POST | `/reset` | Rebuild the initial state from Postgres (roster/config) + the metro graph (topology). Tick 0, all trains back at their route origins. |
+| POST | `/speed?value={0.5\|1\|2\|5\|10\|50}` | Not in the original endpoint list, but necessary to reach the required speed multipliers from outside the process. 400 on any other value. |
+| GET | `/state` | Full snapshot: clock + every train's position/status. |
+| GET | `/time` | Just the clock — status, current tick, simulation time, speed. |
+
+Example — start, speed up, and watch a train actually move (not teleport) along a real track:
+
+```bash
+curl -X POST http://localhost:8080/api/simulation/start
+curl -X POST "http://localhost:8080/api/simulation/speed?value=10"
+curl http://localhost:8080/api/simulation/state
+# trains[].progress moves continuously 0→1 across ticks; trains[].speedKmph reflects the
+# real distance/travel-time of whichever track they're currently on.
+```
+
 ### Error format
 
 Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `ProblemDetail`:
@@ -69,12 +94,25 @@ never leaked to the client).
 
 ## WebSocket (STOMP over `/ws`)
 
-Connect a STOMP client to `ws://localhost:8080/ws` (native WebSocket, no SockJS) and subscribe to
-`/topic/simulation`. A message is broadcast on every tick and on every `start`/`pause`/`reset`:
+One STOMP endpoint, three topics:
 
-```json
-{ "status": "RUNNING", "currentTick": 42, "elapsedSimulationMs": 42000 }
-```
+- `/topic/simulation` — the legacy tick clock. Broadcast on every tick and on every
+  `start`/`pause`/`reset` at `/api/v1/simulation`:
+  ```json
+  { "status": "RUNNING", "currentTick": 42, "elapsedSimulationMs": 42000 }
+  ```
+- `/topic/train-simulation/state` — the discrete-time engine's full state, broadcast every tick
+  (real-time train positions):
+  ```json
+  { "clock": { "status": "RUNNING", "currentTick": 12, "elapsedSimulationSeconds": 60, "speed": 5.0, ... },
+    "trains": [ { "code": "PL-01", "status": "RUNNING", "progress": 0.34, "speedKmph": 34.0, ... } ] }
+  ```
+- `/topic/train-simulation/events` — only the discrete occurrences from a tick (empty ticks publish
+  nothing here), one array per message:
+  ```json
+  [ { "tick": 22, "type": "DEPARTED", "trainCode": "YL-01", "message": "YL-01 departed toward Central Silk Board" } ]
+  ```
 
-The frontend's wrapper is `frontend/src/lib/ws/simulation-socket.ts`; it auto-reconnects with a
-3-second backoff.
+The frontend's wrapper for the legacy topic is `frontend/src/lib/ws/simulation-socket.ts`; it
+auto-reconnects with a 3-second backoff. Nothing consumes the two `train-simulation` topics from the
+frontend yet — verified directly with a raw STOMP client instead (see `docs/architecture.md`).

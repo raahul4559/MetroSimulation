@@ -1,12 +1,12 @@
 # Domain model
 
-Two separate domain models, one per bounded context (see `docs/architecture.md`). Backend records
+Three separate domain models, one per backend vertical (see `docs/architecture.md`). Backend records
 live under `backend/.../domain/model/`; the frontend mirrors what's exposed over each API as
 TypeScript interfaces under `frontend/src/domain/`.
 
-## Simulation clock (`com.nammametro.simulation.domain.model`, Postgres-backed)
+## Legacy tick clock (`com.nammametro.simulation.domain.model`, Postgres-backed)
 
-Seven entities.
+Seven entities — kept for reference; `trainsim` (below) is the actively-developed engine now.
 
 ```mermaid
 erDiagram
@@ -24,18 +24,37 @@ erDiagram
 | **Station** | Yes (`stations`) | `code`, `name`, lat/lng, `interchange`, `platformCount`. A station on two lines' `line_stations` rows is an interchange by construction (Majestic, RV Road). |
 | **Line** | Yes (`lines` + `line_stations`) | `code`, `name`, `colourHex`, `status`, and an ordered `List<Station>` built from `line_stations.sequence_no`. |
 | **Track** | Yes (`tracks`) | Directional segment between two adjacent stations on a line. `UP`/`DOWN` are separate rows, not a single bidirectional edge. |
-| **Signal** | Yes (`signals`), not yet queried | One per track, mid-block, seeded `GREEN`. No REST endpoint or out-port yet — nothing consumes it until signalling logic exists. |
-| **Train** | Yes (`trains`), not yet queried | Two per line, `IDLE`, no `currentTrackId`. Persistence layer exists (repository + adapter); no REST endpoint yet since nothing displays them this chunk. |
-| **Passenger** | **No table** — runtime-only | Generated and consumed entirely in memory once passenger simulation exists. A table is only worth adding if passenger history needs to survive a restart. |
-| **Simulation** | Config persisted (`simulation_config`); live state is in-memory | `Simulation` is an immutable record — `status`, `currentTick`, `elapsedSimulationTime`, `config`. `SimulationEngine` holds the current one in an `AtomicReference` and replaces it each tick; it is not written back to the database. |
+| **Signal** | Yes (`signals`), not yet queried | One per track, mid-block, seeded `GREEN`. This bounded context's own headway/signalling never landed — `trainsim` implements headway independently against `metro`'s tracks instead (see below). |
+| **Train** | Yes (`trains`) | `code`, `lineId` + `lineCode`, `direction` (`OUTBOUND`/`INBOUND`), `capacity`. This table *is* now actively read — by `trainsim.TrainRosterAssembler`, as the discrete-time engine's persisted roster, cross-referenced into `metro.network.MetroNetwork` by `lineCode`. |
+| **Passenger** | **No table** — runtime-only | Still not implemented — explicitly deferred again this chunk. A table is only worth adding if passenger history needs to survive a restart. |
+| **Simulation** (legacy) | Config persisted (`simulation_config`); live state is in-memory | The original tick-only `Simulation`/`SimulationEngine` pair, independent of and superseded in capability by `trainsim.TrainSimulationEngine` below, but left running at `/api/v1/simulation` for reference. `simulation_config` itself gained four new columns (`start_time`, `base_sim_seconds_per_tick`, `delay_threshold_seconds`, `random_seed`) in V3 — read by `trainsim`, not by this legacy engine. |
 
 ## Why some models exist but do nothing yet
 
-`Train`, `Signal`, and `Passenger` are deliberately inert this chunk — the fields a future feature
-will obviously need, and nothing more. `TickHandler` (`application/service/TickHandler.java`) is the
-extension seam: a future "train movement" feature adds a `TickHandler` implementation that reads and
-advances train positions each tick; it does not need to change `SimulationEngine`, the REST
-controllers, or the WebSocket wiring.
+`Signal` and `Passenger` are deliberately inert — `Signal` because `trainsim`'s headway model turned
+out simpler to build directly against `metro.domain.model.Track` (a one-train-per-block occupancy
+check) than to route through this table's per-signal rows; `Passenger` because passenger demand is
+explicitly out of scope until a future chunk.
+
+## Discrete-time simulation engine (`com.nammametro.simulation.trainsim.domain.model`, Postgres + graph)
+
+The active train-movement engine. `SimulationState` is the aggregate: a `SimulationClock` plus every
+train's `TrainState`. Both are plain immutable records — the engine holds the current one in an
+`AtomicReference` and replaces it wholesale each tick (see `docs/architecture.md` for the full tick
+pipeline and determinism argument).
+
+| Entity | Notes |
+|---|---|
+| **SimulationClock** | `startTime` (a fixed `Instant`, never wall-clock `now()`), `status` (reuses the legacy `SimulationStatus` enum), `speed` (`SimulationSpeed`: 0.5/1/2/5/10/50x), `currentTick`, `elapsedSimulationSeconds`. `currentTime()` is `startTime + elapsedSimulationSeconds` — a pure derivation, not a stored value. |
+| **TrainState** | `id`, `code`, `lineCode`, `direction`, `currentTrackId` (null unless departing/running/arriving), `previousStationId`/`nextStationId`, `progress` (0→1, never teleports), `speedKmph`, `status` (`TrainStatus`, 8 values — see its Javadoc for the full transition diagram), `passengerCount`, `capacity`, plus two implementation-only fields (`dwellRemainingSeconds`, `heldSeconds`) the dwell/headway logic needs to be resumable. |
+| **EngineSettings** | `baseSimSecondsPerTick`, `minHeadwaySeconds` (reuses `simulation_config.headway_seconds`), `delayThresholdSeconds`, `randomSeed` — loaded once per run, never mutated by the tick loop. |
+| **SimulationEvent** | `tick`, `simulationTime`, `type` (`EventType`: `DWELL_STARTED`/`DEPARTED`/`ARRIVED`/`HELD_FOR_HEADWAY`/`DELAYED`/`ROUTE_COMPLETED`), `trainId`, `trainCode`, `stationId`, `message`. Not stored in `SimulationState` — collected per tick and broadcast separately (`/topic/train-simulation/events`), a streaming concern rather than queryable state. |
+
+`TrainRosterAssembler` is the only place that reads external state: `Train`/`SimulationConfig` from
+Postgres (via the *existing* `TrainRepository`/`SimulationConfigRepository` out-ports — reused
+as-is, not duplicated) and `Line`/`Station` topology from `metro.network.MetroNetwork`. It runs once
+at startup and again on every `reset()`, producing a fresh `SimulationState` with every train
+`AT_STATION` at the first stop of its configured `direction`.
 
 ## Network graph (`com.nammametro.simulation.metro.domain.model`, JSON-dataset-backed)
 

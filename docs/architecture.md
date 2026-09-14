@@ -4,31 +4,34 @@
 
 ```
 MetroSimulation/
-├── database/    Flyway migrations (schema + seed) — Postgres, backs the simulation clock/trains
+├── database/    Flyway migrations (schema + seed) — Postgres, backs the train roster/sim config
 ├── data/        JSON metro network dataset — backs the in-memory routing graph (see below)
-├── backend/     Spring Boot — network graph + routing, simulation clock, REST + WebSocket
+├── backend/     Spring Boot — network graph + routing, discrete-time train sim, REST + WebSocket
 ├── frontend/    Next.js — visualization and controls, zero simulation/routing logic
 └── docs/        this directory
 ```
 
-## Two backend bounded contexts, on purpose
+## Three backend verticals, on purpose
 
-The backend has two independent verticals under `com.nammametro.simulation`, deliberately kept
+The backend has three independent verticals under `com.nammametro.simulation`, deliberately kept
 separate rather than forced into one model:
 
-| | `simulation` (original) | `metro` (network graph) |
-|---|---|---|
-| Concern | Mutable runtime state: trains, simulation clock, tick loop | Static topology: stations, lines, tracks, routing |
-| Data source | PostgreSQL via JPA/Flyway | JSON files in `data/metro/`, loaded once at startup |
-| Query pattern | Repository queries the DB per request | In-memory graph, built once, queried directly |
-| REST prefix | `/api/v1/*` | `/api/metro/*` |
+| | `simulation` (original) | `metro` (network graph) | `trainsim` (discrete-time engine) |
+|---|---|---|---|
+| Concern | Legacy tick-only clock (kept for reference, independent) | Static topology: stations, lines, tracks, routing | Runtime train movement, dwell, headway, events |
+| Data source | PostgreSQL via JPA/Flyway | JSON files in `data/metro/`, loaded once at startup | Postgres (roster + config) + `metro`'s graph (topology) |
+| Query pattern | Repository queries the DB per request | In-memory graph, built once, queried directly | In-memory `SimulationState`, rebuilt from Postgres+graph at startup/reset |
+| REST prefix | `/api/v1/*` | `/api/metro/*` | `/api/simulation/*` |
+| WebSocket topic | `/topic/simulation` | — | `/topic/train-simulation/{state,events}` |
 
-They share only the framework-free `Coordinates` record and the `ResourceNotFoundException` /
-`GlobalExceptionHandler` plumbing. A station's identity, coordinates, and line membership are
-answered by `metro`; whether a train is currently dwelling there is a `simulation` concern for a
-future chunk. Forcing these into one model now would mean either querying Postgres per route-finding
-call (the thing explicitly being avoided) or persisting mutable simulation state into a graph meant
-to be rebuilt wholesale from a JSON file on every restart.
+They share the framework-free `Coordinates` record, `TrainDirection` enum, `ResourceNotFoundException`
+/ `GlobalExceptionHandler` plumbing, and (crucially) `trainsim` depends on both `simulation` (for the
+persisted `Train`/`SimulationConfig` roster, via the existing `TrainRepository` /
+`SimulationConfigRepository` out-ports) and `metro` (for real station/track topology via
+`MetroNetwork`). Nothing in `trainsim` queries Postgres or the graph *during* a tick — both are read
+once, at startup or `reset()`, into an immutable `SimulationState`; the tick loop itself only ever
+transforms that state in memory. `metro`'s own topology is unaffected by any of this — it doesn't
+know trains exist.
 
 ## `simulation`: hexagonal layering
 
@@ -80,6 +83,64 @@ Station type (`REGULAR` / `INTERCHANGE` / `TERMINAL`) and a station's line membe
 from `lines.json` at load time, not authored redundantly per station — a station can't claim to be an
 interchange in one place and not appear on two lines in another.
 
+## `trainsim`: the discrete-time simulation engine
+
+```
+com.nammametro.simulation.trainsim
+├── domain/model/    SimulationClock, SimulationState, TrainState, SimulationSpeed, SimulationEvent,
+│                    TrainStatus, EngineSettings — pure Java records/enums
+├── application/
+│   ├── TickContext, TickResult, TickHandler          the pipeline contract
+│   ├── tick/        ClockAdvanceHandler, TrainMovementTickHandler — pure, no Spring
+│   ├── TrainSimulationEngine                         @Service, @Scheduled tick loop
+│   ├── TrainSimulationControlUseCase                 in-port: start/pause/stop/reset/setSpeed/state/time
+│   └── TrainSimulationEventPublisher                 out-port for broadcasting
+├── infrastructure/
+│   ├── TrainRosterAssembler   Postgres (roster+config) + MetroNetwork (topology) → initial SimulationState
+│   └── websocket/             TrainSimulationEventPublisherAdapter — implements the out-port
+└── api/rest/                  TrainSimulationController + DTOs
+```
+
+### Determinism
+
+`TrainSimulationEngine.tick()` runs an explicitly-ordered pipeline — `ClockAdvanceHandler` then
+`TrainMovementTickHandler` — composed in code, never via Spring's implicit bean-list ordering. Both
+handlers are pure functions of `(SimulationState, TickContext)`: no wall-clock reads, no I/O, no
+mutation of their inputs. `TrainRosterAssembler.assemble()` (called once at startup and again on
+every `reset()`) is the only place external state (Postgres, `MetroNetwork`) is read — the tick loop
+itself never touches either. `TrainMovementTickHandlerTest.sameInitialStateAndSeedProducesIdenticalTrajectory`
+runs two independently-built initial states through 40 ticks and asserts the resulting
+`SimulationState` and event lists are `.equals()` at every step — the "same network + config +
+initial state + seed ⇒ same result" requirement, pinned down as a test rather than just a claim.
+
+### Movement, headway, and events
+
+Each train advances through `TrainStatus`'s eight values every tick — see the enum's Javadoc for the
+full transition diagram. `progress` moves continuously from 0 to 1 along a track (never teleports);
+speed at each point is derived from the current track's real distance/travel-time
+(`(distanceMetres/1000) / (travelTimeSeconds/3600)` km/h). Headway is a simple one-train-per-track
+block signal: a train ready to depart checks whether its target track is already occupied by a
+train `DEPARTING`/`RUNNING`/`ARRIVING` on it; if so, it holds (`STOPPED`, then `DELAYED` past
+`delayThresholdSeconds`) and re-checks every tick. That occupancy set is updated *within* the same
+tick as trains are processed — not just carried over from the previous tick — so two trains whose
+dwell expires simultaneously can't both claim the same block
+(`TrainMovementTickHandlerTest.secondTrainIsHeldForHeadwayWhileTrackIsOccupied` pins this down).
+Discrete events (`DWELL_STARTED`, `DEPARTED`, `ARRIVED`, `HELD_FOR_HEADWAY`, `DELAYED`,
+`ROUTE_COMPLETED`) are collected per tick and broadcast on a separate topic from the continuous
+state stream, rather than accumulated into queryable state.
+
+Passenger demand is explicitly out of scope this chunk — `passengerCount` passes through each tick
+unchanged, and `TickContext.random()` (seeded from `EngineSettings.randomSeed()`) is wired through
+but unused, ready for a demand model to consume deterministically without a new dependency.
+
+### Why trains persist in Postgres but topology doesn't
+
+The train roster and simulation config are genuinely mutable, operator-owned configuration — which
+trains exist, their capacity, their default speed — and persisting them in Postgres was the original
+foundation's explicit mandate. Station/line/track topology is a large, mostly-static dataset better
+served by a version-controlled JSON file loaded into a graph once (see the `metro` section above).
+`trainsim` reads both, at the same startup/reset moment, but never conflates them into one model.
+
 ## Frontend: no simulation or routing logic in components
 
 ```
@@ -109,8 +170,10 @@ renderer is an additive change later, not a data model change.
 
 ## Explicitly deferred
 
-Train movement, dwell timing, headway/signalling logic, passenger generation and persistence,
-capacity handling, delays/disruptions, analytics, auth, and CI are out of scope. Passenger routing
-UI (a "plan a trip" screen using `/api/metro/route`) is built and verified on the backend but not yet
-wired into the frontend — the spec for this chunk scoped the frontend to the network visualization
-only. See `docs/domain-model.md` for which domain records exist but have no behaviour yet.
+Passenger demand/generation, capacity-aware boarding/alighting, delays/disruptions beyond headway
+holds, analytics, auth, and CI are out of scope. The frontend does not yet render live train
+positions or the passenger-routing UI (`/api/metro/route`, `/api/simulation/*`) — this chunk's spec
+scoped the simulation engine work to the backend, verified directly via REST/WebSocket rather than a
+UI. Both are natural next frontend steps: `/topic/train-simulation/state` already carries everything
+a map layer would need. See `docs/domain-model.md` for which domain records exist but have no
+behaviour yet.

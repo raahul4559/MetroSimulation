@@ -27,6 +27,9 @@ public class TrainJpaEntity {
     @JoinColumn(name = "current_track_id")
     private TrackJpaEntity currentTrack;
 
+    @Column(nullable = false)
+    private String direction;
+
     protected TrainJpaEntity() {
         // JPA
     }
@@ -53,5 +56,9 @@ public class TrainJpaEntity {
 
     public TrackJpaEntity getCurrentTrack() {
         return currentTrack;
+    }
+
+    public String getDirection() {
+        return direction;
     }
 }

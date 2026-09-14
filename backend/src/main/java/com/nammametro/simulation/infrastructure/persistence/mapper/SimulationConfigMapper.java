@@ -16,7 +16,11 @@ public final class SimulationConfigMapper {
                 entity.getTimeScale(),
                 entity.getDwellTimeSeconds(),
                 entity.getHeadwaySeconds(),
-                entity.isActive()
+                entity.isActive(),
+                entity.getStartTime(),
+                entity.getBaseSimSecondsPerTick(),
+                entity.getDelayThresholdSeconds(),
+                entity.getRandomSeed()
         );
     }
 }
