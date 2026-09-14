@@ -12,6 +12,10 @@ import { LineFilter } from "@/components/trains/LineFilter";
 import { TrainList } from "@/components/trains/TrainList";
 import { TrainDetails } from "@/components/trains/TrainDetails";
 import { PassengerMetricsPanel } from "@/components/trains/PassengerMetricsPanel";
+import { DisruptionPanel } from "@/components/disruptions/DisruptionPanel";
+import { ActiveDisruptionsList } from "@/components/disruptions/ActiveDisruptionsList";
+import { DelayAnalyticsPanel } from "@/components/disruptions/DelayAnalyticsPanel";
+import { useDisruptions } from "@/hooks/useDisruptions";
 
 const EMPTY_PASSENGER_METRICS = {
   totalGenerated: 0,
@@ -36,6 +40,8 @@ export default function DashboardPage() {
     setSpeed,
   } = useTrainSimulation();
   const { hiddenLineCodes, toggleLine } = useLineVisibility();
+  const { isBusy: disruptionsBusy, error: disruptionsError, create: createDisruption, cancel: cancelDisruption } =
+    useDisruptions();
 
   const [selectedTrainId, setSelectedTrainId] = useState<number | null>(null);
   const [focusToken, setFocusToken] = useState(0);
@@ -44,6 +50,8 @@ export default function DashboardPage() {
   const signals = simState?.signals ?? [];
   const passengers = simState?.passengers ?? [];
   const passengerMetrics = simState?.passengerMetrics ?? EMPTY_PASSENGER_METRICS;
+  const disruptions = simState?.disruptions ?? [];
+  const elapsedSeconds = simState?.clock.elapsedSimulationSeconds ?? 0;
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
 
   function selectTrain(id: number | null) {
@@ -128,6 +136,28 @@ export default function DashboardPage() {
               stations={stations}
               tracks={tracks}
               signals={signals}
+            />
+          </Panel>
+
+          <Panel title="Delay impact">
+            <DelayAnalyticsPanel trains={trains} />
+          </Panel>
+
+          <Panel title="Create disruption">
+            <DisruptionPanel
+              stations={stations}
+              trains={trains}
+              onCreate={createDisruption}
+              isBusy={disruptionsBusy}
+              error={disruptionsError}
+            />
+          </Panel>
+
+          <Panel title="Disruptions">
+            <ActiveDisruptionsList
+              disruptions={disruptions}
+              elapsedSeconds={elapsedSeconds}
+              onCancel={cancelDisruption}
             />
           </Panel>
         </div>

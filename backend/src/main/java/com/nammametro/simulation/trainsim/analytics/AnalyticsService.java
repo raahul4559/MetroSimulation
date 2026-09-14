@@ -88,14 +88,22 @@ public class AnalyticsService {
                 if (customFrom == null || customTo == null) {
                     throw new IllegalArgumentException("range=CUSTOM requires both 'from' and 'to' query parameters");
                 }
-                long from = Math.max(0, Duration.between(clock.startTime(), customFrom).getSeconds());
-                long to = Math.min(latestElapsed, Duration.between(clock.startTime(), customTo).getSeconds());
+                long from = clamp(Duration.between(clock.startTime(), customFrom).getSeconds(), latestElapsed);
+                long to = clamp(Duration.between(clock.startTime(), customTo).getSeconds(), latestElapsed);
                 if (from > to) {
                     throw new IllegalArgumentException("'from' must not be after 'to'");
                 }
                 yield new long[]{from, to};
             }
         };
+    }
+
+    /** Both bounds of a CUSTOM range are clamped into {@code [0, latestElapsed]} — a caller picking
+     * a wall-clock datetime outside the simulation's own (unrelated) clock range, in either
+     * direction, lands on the nearest valid edge rather than producing an inverted or
+     * out-of-bounds window. */
+    private long clamp(long seconds, long latestElapsed) {
+        return Math.max(0, Math.min(latestElapsed, seconds));
     }
 
     // ---- LIVE ----------------------------------------------------------------------------------

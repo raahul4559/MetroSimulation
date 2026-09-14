@@ -23,6 +23,10 @@ const WIDTH = 800;
 const BAR_THICKNESS = 20;
 const BAR_GAP = 6;
 
+function truncate(label: string, maxChars: number): string {
+  return label.length > maxChars ? `${label.slice(0, maxChars - 1)}…` : label;
+}
+
 /** A hand-rolled bar chart — ≤24px-thick bars with a 4px rounded data-end, a 2px surface gap
  * between neighbors, value-at-the-tip labels in neutral ink (never the bar's own color), and a
  * per-bar hover tooltip. */
@@ -71,9 +75,12 @@ export function BarChart({ data, orientation, valueFormat, height = 200 }: BarCh
   }
 
   // Horizontal: one row per datum, sorted by the caller, label on the left, bar + value to the right.
+  // labelW is sized for this app's longest real station name ("Majestic (Kempegowda)"); truncate()
+  // is the fallback for anything longer than that still fitting the reserved column rather than
+  // running past x=0 and getting clipped by the viewBox.
   const rowH = BAR_THICKNESS + BAR_GAP;
   const chartHeight = data.length * rowH + 8;
-  const labelW = 108;
+  const labelW = 170;
   const padRight = 48;
   const plotW = WIDTH - labelW - padRight;
 
@@ -87,7 +94,7 @@ export function BarChart({ data, orientation, valueFormat, height = 200 }: BarCh
           <g key={d.key} onPointerEnter={() => setHoverKey(d.key)} onPointerLeave={() => setHoverKey(null)}>
             <title>{`${d.label}: ${format(d.value)}`}</title>
             <text x={labelW - 8} y={y + BAR_THICKNESS / 2} textAnchor="end" dominantBaseline="middle" className="fill-slate-400" fontSize={11}>
-              {d.label}
+              {truncate(d.label, 26)}
             </text>
             <rect x={labelW} y={y} width={barW} height={BAR_THICKNESS} rx={4} fill={d.color} opacity={isHover ? 1 : 0.9} />
             <text x={labelW + barW + 6} y={y + BAR_THICKNESS / 2} dominantBaseline="middle" className="fill-slate-300" fontSize={11}>

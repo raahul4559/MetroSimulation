@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { TimeRangePicker } from "./TimeRangePicker";
 import { KindBadge } from "./KindBadge";
