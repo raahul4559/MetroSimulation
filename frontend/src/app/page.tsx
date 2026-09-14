@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [focusToken, setFocusToken] = useState(0);
 
   const trains = simState?.trains ?? [];
+  const signals = simState?.signals ?? [];
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
 
   function selectTrain(id: number | null) {
@@ -59,6 +60,7 @@ export default function DashboardPage() {
                 stations={stations}
                 tracks={tracks}
                 trains={trains}
+                signals={signals}
                 connectionStatus={connectionStatus}
                 hiddenLineCodes={hiddenLineCodes}
                 onToggleLine={toggleLine}
@@ -99,7 +101,13 @@ export default function DashboardPage() {
           </Panel>
 
           <Panel title="Train details">
-            <TrainDetails train={selectedTrain} lines={lines} stations={stations} />
+            <TrainDetails
+              train={selectedTrain}
+              lines={lines}
+              stations={stations}
+              tracks={tracks}
+              signals={signals}
+            />
           </Panel>
         </div>
       </main>

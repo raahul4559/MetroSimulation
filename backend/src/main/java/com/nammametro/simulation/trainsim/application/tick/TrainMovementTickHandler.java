@@ -8,7 +8,9 @@ import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.application.TickContext;
 import com.nammametro.simulation.trainsim.application.TickHandler;
 import com.nammametro.simulation.trainsim.application.TickResult;
+import com.nammametro.simulation.trainsim.domain.model.BlockState;
 import com.nammametro.simulation.trainsim.domain.model.EventType;
+import com.nammametro.simulation.trainsim.domain.model.Signal;
 import com.nammametro.simulation.trainsim.domain.model.SimulationEvent;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
 import com.nammametro.simulation.trainsim.domain.model.TrainState;
@@ -17,21 +19,30 @@ import com.nammametro.simulation.trainsim.domain.model.TrainStatus;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 /**
- * Advances every train by one tick: dwell countdown, headway-gated departure, continuous progress
- * along the current track under real accel/cruise/brake kinematics, and arrival handling.
- * Occupancy is read from the SNAPSHOT of {@code current} taken before any train in this tick is
- * updated, so the result is independent of train iteration order — a determinism requirement, not
- * just tidiness. {@link TrainStatus#SCHEDULED} trains are untouched here — releasing them into
- * service is {@code TrainDispatcher}'s job, earlier in the pipeline.
+ * Advances every train by one tick: dwell countdown, signal-gated departure, continuous progress
+ * along the current block under real accel/cruise/brake kinematics (with a caution-speed
+ * restriction when the block beyond is not clear), and arrival handling. Also produces this tick's
+ * {@link Signal} for every track — the map's "block section" and headway logic are the same data,
+ * not two parallel implementations that could drift apart.
+ *
+ * <p>Occupancy is read from a {@link BlockBoard} snapshotted from {@code current} before any train
+ * in this tick is updated, then mutated as trains are processed (in fixed roster order) — so two
+ * trains whose dwell expires in the SAME tick can't both claim the same block (the second sees the
+ * first's claim), independent of iteration order as an input, deterministically so as an output.
+ * {@link TrainStatus#SCHEDULED} trains are untouched here — releasing them into service is
+ * {@code TrainDispatcher}'s job, earlier in the pipeline.
  */
 public class TrainMovementTickHandler implements TickHandler {
+
+    /** A train departing under a YELLOW-observed (RESERVED) downstream block cruises at this
+     * fraction of its normal max speed — the simulation's whole "speed restriction" story: simple,
+     * visible, and not a claim to model real multi-aspect distant signalling. */
+    private static final double CAUTION_SPEED_FACTOR = 0.5;
 
     @Override
     public TickResult handle(SimulationState current, TickContext context) {
@@ -39,37 +50,41 @@ public class TrainMovementTickHandler implements TickHandler {
         long tick = current.clock().currentTick();
         Instant simTime = current.clock().currentTime();
 
-        // Mutable and updated as trains are processed (in fixed roster order) so two trains whose
-        // dwell expires in the SAME tick can't both claim the same track — the second sees the
-        // first's claim. Order-dependent, but deterministically so: roster order is a fixed input.
-        Set<Long> occupiedTracks = new HashSet<>(occupiedTrackIdsFromPriorTicks(current.trains()));
+        BlockBoard board = initialBoard(current.trains());
 
         List<TrainState> updated = new ArrayList<>();
         List<SimulationEvent> events = new ArrayList<>();
 
         for (TrainState train : current.trains()) {
-            StepResult step = advance(train, delta, context, tick, simTime, occupiedTracks);
+            StepResult step = advance(train, delta, context, tick, simTime, board);
             if (step.train().status() == TrainStatus.DEPARTING) {
-                occupiedTracks.add(step.train().currentTrackId());
+                board.reserve(step.train().currentTrackId(), step.train().id());
             }
             updated.add(step.train());
             events.addAll(step.events());
         }
 
-        return new TickResult(current.withTrains(updated), events);
+        List<Signal> signals = context.network().allTracks().stream()
+                .map(track -> board.toSignal(track.id()))
+                .toList();
+
+        return new TickResult(current.withTrains(updated).withSignals(signals), events);
     }
 
-    private Set<Long> occupiedTrackIdsFromPriorTicks(List<TrainState> trains) {
-        return trains.stream()
-                .filter(t -> t.status() == TrainStatus.DEPARTING || t.status() == TrainStatus.RUNNING
-                        || t.status() == TrainStatus.ARRIVING)
-                .map(TrainState::currentTrackId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+    private BlockBoard initialBoard(List<TrainState> trains) {
+        BlockBoard board = new BlockBoard();
+        for (TrainState t : trains) {
+            boolean inBlock = t.status() == TrainStatus.DEPARTING || t.status() == TrainStatus.RUNNING
+                    || t.status() == TrainStatus.ARRIVING;
+            if (inBlock && t.currentTrackId() != null) {
+                board.occupy(t.currentTrackId(), t.id());
+            }
+        }
+        return board;
     }
 
     private StepResult advance(TrainState train, long delta, TickContext ctx, long tick, Instant simTime,
-                                Set<Long> occupiedTracks) {
+                                BlockBoard board) {
         MetroNetwork network = ctx.network();
 
         return switch (train.status()) {
@@ -88,15 +103,15 @@ public class TrainMovementTickHandler implements TickHandler {
                 if (remaining > 0) {
                     yield StepResult.unchanged(withDwellRemaining(train, remaining));
                 }
-                yield handleDwellExpiry(train, ctx, tick, simTime, occupiedTracks);
+                yield handleDwellExpiry(train, ctx, tick, simTime, board);
             }
 
-            case STOPPED, DELAYED -> tryDepart(train, ctx, tick, simTime, occupiedTracks, (int) delta);
+            case STOPPED, DELAYED -> tryDepart(train, ctx, tick, simTime, board, (int) delta);
 
             case DEPARTING -> {
                 Track track = network.getSingleTrackBetween(train.previousStationId(), train.nextStationId())
                         .orElseThrow();
-                yield StepResult.of(advanceAlongTrack(train, track, delta),
+                yield StepResult.of(advanceAlongTrack(train, track, delta, ctx, board),
                         event(tick, simTime, EventType.DEPARTED, train, train.previousStationId(),
                                 "%s departed toward %s".formatted(train.code(), stationName(network, train.nextStationId()))));
             }
@@ -104,7 +119,7 @@ public class TrainMovementTickHandler implements TickHandler {
             case RUNNING -> {
                 Track track = network.getSingleTrackBetween(train.previousStationId(), train.nextStationId())
                         .orElseThrow();
-                yield StepResult.unchanged(advanceAlongTrack(train, track, delta));
+                yield StepResult.unchanged(advanceAlongTrack(train, track, delta, ctx, board));
             }
 
             case ARRIVING -> {
@@ -118,22 +133,24 @@ public class TrainMovementTickHandler implements TickHandler {
     }
 
     /**
-     * One tick of real kinematics along the train's current track: accelerate toward
-     * {@code maxSpeedKmph} unless the remaining distance is inside the braking distance needed to
-     * stop at the platform ({@code v^2 / (2 * brakingRateMps2)}), in which case decelerate instead —
-     * the standard "always look ahead to the stop point" trapezoidal-profile controller. Distance
-     * covered this tick is the trapezoidal average of the speed at the start and end of the tick,
-     * which is exact for constant acceleration and a good approximation across the accel/brake
-     * transition. Never overshoots the platform: progress clamps at 1.0 and the train becomes
+     * One tick of real kinematics along the train's current block: accelerate toward its
+     * effective max speed unless the remaining distance is inside the braking distance needed to
+     * stop at the platform ({@code v^2 / (2 * brakingRateMps2)}), in which case decelerate instead
+     * — the standard "always look ahead to the stop point" trapezoidal-profile controller. The
+     * effective max speed is the train's own {@code maxSpeedKmph}, capped by
+     * {@link #CAUTION_SPEED_FACTOR} if the block beyond this one isn't FREE — a simplified stand-in
+     * for a following train restraining its speed rather than rushing up to a busy platform.
+     * Distance covered this tick is the trapezoidal average of the speed at the start and end of
+     * the tick. Never overshoots the platform: progress clamps at 1.0 and the train becomes
      * {@link TrainStatus#ARRIVING} instead.
      */
-    private TrainState advanceAlongTrack(TrainState train, Track track, long delta) {
+    private TrainState advanceAlongTrack(TrainState train, Track track, long delta, TickContext ctx, BlockBoard board) {
         double trackLengthMetres = track.distanceMetres();
         double distanceIntoTrack = train.progress() * trackLengthMetres;
         double remaining = trackLengthMetres - distanceIntoTrack;
 
         double v0 = train.speedKmph() / 3.6;
-        double maxSpeed = train.maxSpeedKmph() / 3.6;
+        double maxSpeed = effectiveMaxSpeedMps(train, ctx, board);
         double brakingDistance = (v0 * v0) / (2 * train.brakingRateMps2());
 
         double v1 = remaining <= brakingDistance
@@ -151,8 +168,30 @@ public class TrainMovementTickHandler implements TickHandler {
                 newProgress, v1 * 3.6, 0);
     }
 
+    private double effectiveMaxSpeedMps(TrainState train, TickContext ctx, BlockBoard board) {
+        double maxSpeed = train.maxSpeedKmph() / 3.6;
+        Long downstreamTrackId = downstreamTrackId(train, ctx.network());
+        if (downstreamTrackId == null || board.stateOf(downstreamTrackId) == BlockState.FREE) {
+            return maxSpeed;
+        }
+        return maxSpeed * CAUTION_SPEED_FACTOR;
+    }
+
+    /** The block a train will need *after* the one it's currently on — i.e. the one leaving the
+     * station it's currently headed toward. {@code null} if that station is the end of the route. */
+    private Long downstreamTrackId(TrainState train, MetroNetwork network) {
+        Line line = network.findLineByCode(train.lineCode()).orElseThrow();
+        List<Station> route = routeStations(line, train.direction());
+        int nextIndex = indexOf(route, train.nextStationId());
+        if (nextIndex + 1 >= route.size()) {
+            return null;
+        }
+        long afterNextStationId = route.get(nextIndex + 1).id();
+        return network.getSingleTrackBetween(train.nextStationId(), afterNextStationId).map(Track::id).orElse(null);
+    }
+
     private StepResult handleDwellExpiry(TrainState train, TickContext ctx, long tick, Instant simTime,
-                                          Set<Long> occupiedTracks) {
+                                          BlockBoard board) {
         Long nextId = nextStationAfter(train, ctx.network());
         if (nextId == null) {
             TrainState completed = withStatus(train, TrainStatus.COMPLETED, train.previousStationId(),
@@ -163,15 +202,15 @@ public class TrainMovementTickHandler implements TickHandler {
 
         TrainState pendingDeparture = withStatus(train, TrainStatus.DWELLING, train.previousStationId(), nextId,
                 null, 0, 0, 0);
-        return tryDepart(pendingDeparture, ctx, tick, simTime, occupiedTracks, 0);
+        return tryDepart(pendingDeparture, ctx, tick, simTime, board, 0);
     }
 
     private StepResult tryDepart(TrainState train, TickContext ctx, long tick, Instant simTime,
-                                  Set<Long> occupiedTracks, int extraHeldSeconds) {
+                                  BlockBoard board, int extraHeldSeconds) {
         Track track = ctx.network().getSingleTrackBetween(train.previousStationId(), train.nextStationId())
                 .orElseThrow();
 
-        if (!occupiedTracks.contains(track.id())) {
+        if (board.isFree(track.id())) {
             TrainState departing = withStatus(train, TrainStatus.DEPARTING, train.previousStationId(),
                     train.nextStationId(), track.id(), 0, 0, 0);
             return StepResult.unchanged(departing);
@@ -184,7 +223,7 @@ public class TrainMovementTickHandler implements TickHandler {
                 heldSeconds);
 
         EventType type = delayed ? EventType.DELAYED : EventType.HELD_FOR_HEADWAY;
-        String message = "%s held at %s for headway (%ds)"
+        String message = "%s held at %s for headway (%ds) — signal at RED"
                 .formatted(train.code(), stationName(ctx.network(), train.previousStationId()), heldSeconds);
         return StepResult.of(held, event(tick, simTime, type, train, train.previousStationId(), message));
     }
@@ -261,6 +300,41 @@ public class TrainMovementTickHandler implements TickHandler {
 
         static StepResult of(TrainState train, SimulationEvent event) {
             return new StepResult(train, List.of(event));
+        }
+    }
+
+    /** This tick's block occupancy, mutated as trains are processed (see class javadoc). Not a
+     * domain type itself — {@link #toSignal} is what turns one of its entries into the {@link Signal}
+     * the rest of the system actually sees. */
+    private static final class BlockBoard {
+        private final Map<Long, BlockState> states = new HashMap<>();
+        private final Map<Long, Long> controllers = new HashMap<>();
+
+        boolean isFree(long trackId) {
+            return stateOf(trackId) == BlockState.FREE;
+        }
+
+        BlockState stateOf(long trackId) {
+            return states.getOrDefault(trackId, BlockState.FREE);
+        }
+
+        void occupy(long trackId, long trainId) {
+            states.put(trackId, BlockState.OCCUPIED);
+            controllers.put(trackId, trainId);
+        }
+
+        void reserve(long trackId, long trainId) {
+            states.put(trackId, BlockState.RESERVED);
+            controllers.put(trackId, trainId);
+        }
+
+        Signal toSignal(long trackId) {
+            Long controller = controllers.get(trackId);
+            return switch (stateOf(trackId)) {
+                case FREE -> Signal.free(trackId);
+                case RESERVED -> Signal.reserved(trackId, controller);
+                case OCCUPIED -> Signal.occupied(trackId, controller);
+            };
         }
     }
 }

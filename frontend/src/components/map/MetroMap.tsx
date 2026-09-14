@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
-import type { TrainState } from "@/domain/trainsim";
+import type { Signal, TrainState } from "@/domain/trainsim";
 import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
 import { buildProjector } from "@/lib/geometry/projection";
 import { viewBoxString } from "@/lib/geometry/layout";
 import { isStationVisible, shouldShowLabel } from "@/lib/metro/visibility";
-import { interpolateTrainPoint } from "@/lib/metro/trainPosition";
+import { interpolateTrainPoint, signalAnchorPoint } from "@/lib/metro/trainPosition";
 import { useMapViewport } from "@/hooks/useMapViewport";
 import { MetroLine } from "./MetroLine";
 import { StationMarker } from "./StationMarker";
 import { StationLabel } from "./StationLabel";
 import { TrainMarker } from "./TrainMarker";
+import { SignalMarker } from "./SignalMarker";
 import { MapControls } from "./MapControls";
 import { StationPanel } from "./StationPanel";
 
@@ -23,6 +24,7 @@ interface MetroMapProps {
   stations: readonly Station[];
   tracks: readonly Track[];
   trains: readonly TrainState[];
+  signals: readonly Signal[];
   connectionStatus: ConnectionStatus;
   hiddenLineCodes: ReadonlySet<string>;
   onToggleLine: (code: string) => void;
@@ -43,6 +45,7 @@ export function MetroMap({
   stations,
   tracks,
   trains,
+  signals,
   connectionStatus,
   hiddenLineCodes,
   onToggleLine,
@@ -62,6 +65,7 @@ export function MetroMap({
     [uniqueStations]
   );
   const lineByCode = useMemo(() => new Map(lines.map((line) => [line.code, line])), [lines]);
+  const tracksById = useMemo(() => new Map(tracks.map((track) => [track.id, track])), [tracks]);
 
   const { svgRef, scale, transform, zoomIn, zoomOut, fitNetwork, focusOn, panHandlers } =
     useMapViewport(VIEWPORT);
@@ -129,6 +133,13 @@ export function MetroMap({
                 visible={shouldShowLabel(station, scale, labelsVisible)}
               />
             ))}
+          {signals.map((signal) => {
+            const track = tracksById.get(signal.trackId);
+            if (!track || hiddenLineCodes.has(track.lineCode)) return null;
+            const point = signalAnchorPoint(track, stationsById, project);
+            if (!point) return null;
+            return <SignalMarker key={signal.id} signal={signal} point={point} scale={scale} />;
+          })}
           {visibleTrains.map((train) => {
             const point = interpolateTrainPoint(train, stationsById, project);
             if (!point) return null;

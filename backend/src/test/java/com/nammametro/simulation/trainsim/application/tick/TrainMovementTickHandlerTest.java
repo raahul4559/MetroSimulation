@@ -10,8 +10,11 @@ import com.nammametro.simulation.metro.domain.model.Track;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.application.TickContext;
 import com.nammametro.simulation.trainsim.application.TickResult;
+import com.nammametro.simulation.trainsim.domain.model.BlockState;
 import com.nammametro.simulation.trainsim.domain.model.EngineSettings;
 import com.nammametro.simulation.trainsim.domain.model.EventType;
+import com.nammametro.simulation.trainsim.domain.model.Signal;
+import com.nammametro.simulation.trainsim.domain.model.SignalAspect;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationEvent;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
@@ -63,7 +66,7 @@ class TrainMovementTickHandlerTest {
     private static SimulationState initialState(TrainState... trains) {
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
-        return new SimulationState(clock, List.of(trains));
+        return new SimulationState(clock, List.of(trains), List.of());
     }
 
     private static TickContext contextFor(MetroNetwork network) {
@@ -160,6 +163,25 @@ class TrainMovementTickHandlerTest {
         assertThat(departingOrRunning).isEqualTo(1);
         assertThat(held).isEqualTo(1);
         assertThat(events.stream().anyMatch(e -> e.type() == EventType.HELD_FOR_HEADWAY)).isTrue();
+
+        // The A->B block's signal reflects the one train that claimed it (never GREEN with someone
+        // on it); the untouched B->C block's signal is still GREEN/FREE.
+        Signal blockAB = signalForTrack(state, 1L);
+        assertThat(blockAB.aspect()).isIn(SignalAspect.YELLOW, SignalAspect.RED);
+        assertThat(blockAB.blockState()).isIn(BlockState.RESERVED, BlockState.OCCUPIED);
+        assertThat(blockAB.controllingTrainId()).isNotNull();
+
+        Signal blockBC = signalForTrack(state, 2L);
+        assertThat(blockBC.aspect()).isEqualTo(SignalAspect.GREEN);
+        assertThat(blockBC.blockState()).isEqualTo(BlockState.FREE);
+        assertThat(blockBC.controllingTrainId()).isNull();
+    }
+
+    private static Signal signalForTrack(SimulationState state, long trackId) {
+        return state.signals().stream()
+                .filter(s -> s.trackId() == trackId)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No signal found for track " + trackId));
     }
 
     @Test

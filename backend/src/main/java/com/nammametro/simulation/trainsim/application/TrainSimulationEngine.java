@@ -5,11 +5,14 @@ import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.application.tick.ClockAdvanceHandler;
 import com.nammametro.simulation.trainsim.application.tick.TrainDispatcher;
 import com.nammametro.simulation.trainsim.application.tick.TrainMovementTickHandler;
+import com.nammametro.simulation.trainsim.domain.BlockSafetyValidator;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationEvent;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
 import com.nammametro.simulation.trainsim.infrastructure.LineScheduleAssembler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +36,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Service
 public class TrainSimulationEngine implements TrainSimulationControlUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(TrainSimulationEngine.class);
 
     private final MetroNetwork network;
     private final LineScheduleAssembler assembler;
@@ -117,6 +122,13 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
         eventPublisher.publishState(result);
         if (!allEvents.isEmpty()) {
             eventPublisher.publishEvents(allEvents);
+        }
+
+        // Should never fire — pinned down as a passing test (BlockSafetyValidatorTest) rather than
+        // just this claim. Kept here too so a real violation is loud in production, not silent.
+        List<String> safetyIssues = BlockSafetyValidator.validate(result);
+        if (!safetyIssues.isEmpty()) {
+            log.warn("Block safety violation(s) at tick {}: {}", result.clock().currentTick(), safetyIssues);
         }
     }
 }

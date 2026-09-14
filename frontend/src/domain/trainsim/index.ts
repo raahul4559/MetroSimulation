@@ -3,3 +3,4 @@ export type { TrainSimStatus, SimulationSpeedValue, SimulationClock } from "./si
 export { SIMULATION_SPEEDS } from "./simulationClock";
 export type { SimulationState } from "./simulationState";
 export type { SimulationEventType, SimulationEvent } from "./simulationEvent";
+export type { BlockState, SignalAspect, Signal } from "./signal";

@@ -54,7 +54,9 @@ graph engine, with interchanges called out), a "Live" connection indicator, and 
 with Start/Pause/Stop/Reset and a speed selector. Press Start: trains dispatch onto the map at their
 scheduled times (per line, per direction — see `LineFilter`), move with real accel/cruise/brake
 kinematics, and show up in the Train list/Train details sidebar; click a train (on the map or in the
-list) to select it and focus the map on it.
+list) to select it and focus the map on it. Small colored squares on the map are block signals
+(green = free, red = occupied) — check "Debug mode" in Train details to see the literal
+train → current block → next block → signal → signal state chain for the selected train.
 
 ## Verifying
 
@@ -80,11 +82,12 @@ curl localhost:8080/api/simulation/state
 #   RUNNING, speedKmph ramps 0 → maxSpeedKmph → 0 across a leg (not a flat distance/time average),
 #   and progress moves continuously 0→1 across successive calls, never jumps
 
-# Backend unit tests — network validation, routing, and the engine's scheduling/dispatch/movement
+# Backend unit tests — network validation, routing, and the engine's scheduling/dispatch/movement/signaling
 # (the determinism test asserts identical trajectories from identical inputs, pinned down as a test
 # rather than a claim; the schedule-assembler test asserts a bad first/last/headway/count combination
-# is rejected at load rather than silently producing the wrong number of trains)
-cd backend && ./mvnw test -Dtest='MetroNetworkValidationTest,DijkstraRouteFinderTest,TrainMovementTickHandlerTest,TrainDispatcherTest,LineScheduleAssemblerTest'
+# is rejected at load; the safety-validator test funnels six trains through three shared blocks for
+# 400 ticks asserting they never collide)
+cd backend && ./mvnw test -Dtest='MetroNetworkValidationTest,DijkstraRouteFinderTest,TrainMovementTickHandlerTest,TrainDispatcherTest,LineScheduleAssemblerTest,BlockSafetyValidatorTest'
 
 # Frontend ↔ backend
 open http://localhost:3000   # map renders trains live from /topic/train-simulation/state, no console errors

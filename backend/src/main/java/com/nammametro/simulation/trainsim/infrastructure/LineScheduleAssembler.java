@@ -11,6 +11,7 @@ import com.nammametro.simulation.metro.domain.model.Line;
 import com.nammametro.simulation.metro.domain.model.Station;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.domain.model.EngineSettings;
+import com.nammametro.simulation.trainsim.domain.model.Signal;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
 import com.nammametro.simulation.trainsim.domain.model.SimulationSpeed;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
@@ -75,7 +76,8 @@ public class LineScheduleAssembler {
             trains.addAll(expand(schedule, sequenceByLineCode));
         }
 
-        return new Assembled(new SimulationState(clock, trains), settings);
+        List<Signal> signals = network.allTracks().stream().map(track -> Signal.free(track.id())).toList();
+        return new Assembled(new SimulationState(clock, trains, signals), settings);
     }
 
     private List<TrainState> expand(LineSchedule schedule, Map<String, Integer> sequenceByLineCode) {

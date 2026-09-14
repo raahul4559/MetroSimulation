@@ -63,7 +63,7 @@ curl "http://localhost:8080/api/metro/route?from=9&to=5"
 | POST | `/stop` | Halt the clock (distinct status from `PAUSED`, same effect on the tick loop); state preserved. |
 | POST | `/reset` | Rebuild the initial state from Postgres (roster/config) + the metro graph (topology). Tick 0, all trains back at their route origins. |
 | POST | `/speed?value={0.5\|1\|2\|5\|10\|50}` | Not in the original endpoint list, but necessary to reach the required speed multipliers from outside the process. 400 on any other value. |
-| GET | `/state` | Full snapshot: clock + every train's position/status. |
+| GET | `/state` | Full snapshot: clock, every train's position/status, and every block's signal. |
 | GET | `/time` | Just the clock — status, current tick, simulation time, speed. |
 
 Example — start, speed up, and watch a train actually move (not teleport) along a real track:
@@ -110,7 +110,9 @@ One STOMP endpoint, three topics:
   ```json
   { "clock": { "status": "RUNNING", "currentTick": 12, "elapsedSimulationSeconds": 60, "speed": 5.0, ... },
     "trains": [ { "code": "P01", "status": "RUNNING", "progress": 0.34, "speedKmph": 34.0,
-                  "scheduledDepartureSeconds": 0, "maxSpeedKmph": 80.0, "delaySeconds": 0, ... } ] }
+                  "scheduledDepartureSeconds": 0, "maxSpeedKmph": 80.0, "delaySeconds": 0, ... } ],
+    "signals": [ { "id": "SIG-8", "trackId": 8, "protectedSectionId": 8, "blockState": "OCCUPIED",
+                   "aspect": "RED", "controllingTrainId": 1000 } ] }
   ```
 - `/topic/train-simulation/events` — only the discrete occurrences from a tick (empty ticks publish
   nothing here), one array per message:

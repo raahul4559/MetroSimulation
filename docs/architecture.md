@@ -87,8 +87,10 @@ interchange in one place and not appear on two lines in another.
 
 ```
 com.nammametro.simulation.trainsim
-├── domain/model/    SimulationClock, SimulationState, TrainState, SimulationSpeed, SimulationEvent,
-│                    TrainStatus, EngineSettings — pure Java records/enums
+├── domain/
+│   ├── model/       SimulationClock, SimulationState, TrainState, SimulationSpeed, SimulationEvent,
+│   │                TrainStatus, EngineSettings, Signal, BlockState, SignalAspect — pure records/enums
+│   └── BlockSafetyValidator                          pure, independent collision-invariant check
 ├── application/
 │   ├── TickContext, TickResult, TickHandler          the pipeline contract
 │   ├── tick/        ClockAdvanceHandler, TrainDispatcher, TrainMovementTickHandler — pure, no Spring
@@ -98,7 +100,7 @@ com.nammametro.simulation.trainsim
 ├── infrastructure/
 │   ├── LineScheduleAssembler  Postgres (line_schedules+config) + MetroNetwork (topology) → initial SimulationState
 │   └── websocket/             TrainSimulationEventPublisherAdapter — implements the out-port
-└── api/rest/                  TrainSimulationController + DTOs
+└── api/rest/                  TrainSimulationController + DTOs (incl. SignalResponse)
 ```
 
 ### Determinism
@@ -138,23 +140,58 @@ Each train advances through `TrainStatus`'s nine values every tick — see the e
 full transition diagram (now starting from `SCHEDULED`, `TrainDispatcher`'s entry point). `progress`
 moves continuously from 0 to 1 along a track (never teleports); speed is real per-train kinematics,
 not a flat distance/time average — `TrainMovementTickHandler.advanceAlongTrack()` accelerates toward
-the train's own `maxSpeedKmph` at its `accelerationMps2` unless the remaining distance is inside the
-braking distance needed to stop at the platform (`v² / (2 × brakingRateMps2)`), in which case it
-decelerates at `brakingRateMps2` instead — a standard trapezoidal accel/cruise/brake profile,
-integrated tick-by-tick as a trapezoidal-average of start/end-of-tick speed. Headway is a simple
-one-train-per-track block signal: a train ready to depart checks whether its target track is already
-occupied by a train `DEPARTING`/`RUNNING`/`ARRIVING` on it; if so, it holds (`STOPPED`, then
-`DELAYED` past `delayThresholdSeconds` — exposed to the API as `delaySeconds`) and re-checks every
-tick. That occupancy set is updated *within* the same tick as trains are processed — not just carried
-over from the previous tick — so two trains whose dwell expires simultaneously can't both claim the
-same block (`TrainMovementTickHandlerTest.secondTrainIsHeldForHeadwayWhileTrackIsOccupied` pins this
-down). Discrete events (`DISPATCHED`, `DWELL_STARTED`, `DEPARTED`, `ARRIVED`, `HELD_FOR_HEADWAY`,
-`DELAYED`, `ROUTE_COMPLETED`) are collected per tick and broadcast on a separate topic from the
-continuous state stream, rather than accumulated into queryable state.
+the train's effective max speed (see "Signaling and block sections" below) at its `accelerationMps2`
+unless the remaining distance is inside the braking distance needed to stop at the platform
+(`v² / (2 × brakingRateMps2)`), in which case it decelerates at `brakingRateMps2` instead — a
+standard trapezoidal accel/cruise/brake profile, integrated tick-by-tick as a trapezoidal-average of
+start/end-of-tick speed. Discrete events (`DISPATCHED`, `DWELL_STARTED`, `DEPARTED`, `ARRIVED`,
+`HELD_FOR_HEADWAY`, `DELAYED`, `ROUTE_COMPLETED`) are collected per tick and broadcast on a separate
+topic from the continuous state stream, rather than accumulated into queryable state.
 
 Passenger demand is explicitly out of scope this chunk — `passengerCount` passes through each tick
 unchanged, and `TickContext.random()` (seeded from `EngineSettings.randomSeed()`) is wired through
 but unused, ready for a demand model to consume deterministically without a new dependency.
+
+### Signaling and block sections
+
+Each track is one logical block — dividing tracks any finer would need sub-track train positions the
+rest of the engine doesn't have, and the spec explicitly asks for understandable modeling over
+real-world signaling complexity. `TrainMovementTickHandler` computes a `BlockState`
+(`FREE`/`RESERVED`/`OCCUPIED`) for every block each tick, in a local `BlockBoard` snapshotted from
+the incoming trains and mutated as trains are processed — the same one-train-per-block bookkeeping
+the engine always had, just promoted to an explicit, testable model instead of a bare `Set<Long>`. A
+train transitions its block to `RESERVED` for the single tick it's granted departure (`DEPARTING`),
+then `OCCUPIED` for as long as it's physically in it (`RUNNING`/`ARRIVING`); a train ready to depart
+checks `board.isFree(trackId)` first and holds (`STOPPED`, then `DELAYED` past
+`delayThresholdSeconds` — exposed to the API as `delaySeconds`) if not. That board is updated *within*
+the same tick as trains are processed — not just carried over from the previous tick — so two trains
+whose dwell expires simultaneously can't both claim the same block
+(`TrainMovementTickHandlerTest.secondTrainIsHeldForHeadwayWhileTrackIsOccupied` pins this down). This
+*is* the engine's headway and safe-stopping-distance story: a train physically cannot be granted a
+block another train already holds, and every train brakes to a full stop at every platform by
+construction (real metro operation — no track segment is a through-run), so "signal red → brake →
+stop → signal green → resume" falls out of existing platform-stop physics rather than needing a
+second, parallel braking model.
+
+Each block's `Signal` (`SignalAspect`: `RED`/`YELLOW`/`GREEN`, one-to-one with its `BlockState` —
+`FREE`→`GREEN`, `RESERVED`→`YELLOW`, `OCCUPIED`→`RED`) is derived from that same board at the end of
+the tick and attached to `SimulationState.signals()` — not independent state, just like `TrainState`
+itself. `Signal.protectedSectionId` and `trackId` are always equal in this one-block-per-track model;
+kept as two fields to mirror the spec's literal shape rather than assuming a future, less-simplified
+model must coincide the two. The one genuinely dynamic *speed* behavior — "speed restriction" /
+"following-train control" — is `effectiveMaxSpeedMps()`: a train's cruising speed is capped to half
+its `maxSpeedKmph` whenever the block *after* the one it's currently on isn't `FREE`, modeling a
+train restraining its approach rather than rushing up to a possibly-busy platform. It's a soft
+cruise-speed cap, not a safety gate — the hard "can't enter an occupied block" guarantee is the block
+board, not this.
+
+`BlockSafetyValidator` (pure, `trainsim.domain`) checks the actual collision invariant independently
+of the handler that's supposed to uphold it: no two trains report the same `currentTrackId` while
+both are physically in that block. `TrainSimulationEngine.tick()` logs a warning if it ever fires (it
+shouldn't); `BlockSafetyValidatorTest.manyTrainsQueuingForTheSameBlocksNeverShareOne` stress-tests six
+trains funneling through three single-track blocks for up to 400 ticks, validating after *every* tick
+— "two trains cannot occupy the same protected section simultaneously," pinned down as a test that
+can fail, not just a comment that can drift out of date.
 
 ### Why schedules (and trains) persist in Postgres but topology doesn't
 
@@ -172,14 +209,16 @@ conflates them into one model.
 frontend/src/
 ├── domain/
 │   ├── metro/      TypeScript interfaces mirroring the metro API — the map's data contract
-│   ├── trainsim/   TypeScript interfaces mirroring /api/simulation — TrainState, SimulationClock/State/Event
+│   ├── trainsim/   TypeScript interfaces mirroring /api/simulation — TrainState, Signal,
+│   │               SimulationClock/State/Event
 │   ├── simulation.ts, train.ts   mirroring the legacy simulation-clock API
 ├── lib/
 │   ├── api/        client.ts (three base URLs: /api/v1, /api/metro, /api/simulation), per-context clients
 │   ├── ws/         STOMP WebSocket clients, independent of React (one per backend engine)
 │   ├── geometry/   pure lat/lng → SVG (x, y) projection, path-building, and pan/zoom-transform math
 │   └── metro/      pure derivations over network + train data: neighbor stations, label/line
-│                   visibility rules, train-position interpolation, train status display strings
+│                   visibility rules, train-position interpolation, train status display strings,
+│                   the debug-mode block chain (current/next block lookahead, mirroring the backend's)
 ├── hooks/          bridges lib/* into React state (useNetwork, useTrainSimulation,
 │                   useTrainSimulationSocket, useMapViewport, useLineVisibility, ...)
 └── components/     presentational — map, trains, controls, network, ui
@@ -196,6 +235,16 @@ position, not a continuous camera-follow. `lib/metro/trainPosition.ts#interpolat
 one place a `TrainState`'s `previousStationId`/`nextStationId`/`progress` become an (x, y): it
 linearly interpolates between the two stations' projected points, matching what the backend's own
 `progress` already represents (continuous position along the current track, never teleporting).
+`signalAnchorPoint` (same file) places a block's `SignalMarker` near its origin station rather than
+at the track's midpoint — a signal stands at the entrance to the block it protects.
+
+`components/trains/TrainDetails.tsx` has a "Debug mode" checkbox (local state — nothing else needs
+it) that reveals the literal chain the spec asks for: Train → Current block → Next block → Signal →
+Signal state. `lib/metro/blockChain.ts#computeBlockChain` computes the current/next block ids the
+same way the backend's `TrainMovementTickHandler.downstreamTrackId()` does (walk the line's ordered
+stations in the train's direction, find the track after the one it's headed to) — a second
+implementation of the same lookahead, kept deliberately simple and side-by-side rather than shared
+across the Java/TypeScript boundary.
 
 ## Why a schematic (not geographic) map
 
