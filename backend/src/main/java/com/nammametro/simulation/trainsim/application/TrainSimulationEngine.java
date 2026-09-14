@@ -2,6 +2,7 @@ package com.nammametro.simulation.trainsim.application;
 
 import com.nammametro.simulation.domain.model.SimulationStatus;
 import com.nammametro.simulation.metro.network.MetroNetwork;
+import com.nammametro.simulation.trainsim.analytics.AnalyticsRecorder;
 import com.nammametro.simulation.trainsim.application.tick.ClockAdvanceHandler;
 import com.nammametro.simulation.trainsim.application.tick.PassengerBoardingHandler;
 import com.nammametro.simulation.trainsim.application.tick.PassengerDemandGenerationHandler;
@@ -46,6 +47,7 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
     private final MetroNetwork network;
     private final LineScheduleAssembler assembler;
     private final TrainSimulationEventPublisher eventPublisher;
+    private final AnalyticsRecorder analyticsRecorder;
     private final List<TickHandler> pipeline =
             List.of(new ClockAdvanceHandler(), new TrainDispatcher(), new PassengerDemandGenerationHandler(),
                     new PassengerBoardingHandler(), new TrainMovementTickHandler());
@@ -55,15 +57,17 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
     private final AtomicReference<Random> random;
 
     public TrainSimulationEngine(MetroNetwork network, LineScheduleAssembler assembler,
-                             TrainSimulationEventPublisher eventPublisher) {
+                             TrainSimulationEventPublisher eventPublisher, AnalyticsRecorder analyticsRecorder) {
         this.network = network;
         this.assembler = assembler;
         this.eventPublisher = eventPublisher;
+        this.analyticsRecorder = analyticsRecorder;
 
         LineScheduleAssembler.Assembled initial = assembler.assemble();
         this.assembled = new AtomicReference<>(initial);
         this.state = new AtomicReference<>(initial.initialState());
         this.random = new AtomicReference<>(new Random(initial.settings().randomSeed()));
+        analyticsRecorder.record(initial.initialState());
     }
 
     @Override
@@ -97,6 +101,8 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
         assembled.set(fresh);
         random.set(new Random(fresh.settings().randomSeed()));
         state.set(fresh.initialState());
+        analyticsRecorder.reset();
+        analyticsRecorder.record(fresh.initialState());
         eventPublisher.publishState(fresh.initialState());
         return fresh.initialState();
     }
@@ -124,6 +130,7 @@ public class TrainSimulationEngine implements TrainSimulationControlUseCase {
         }
 
         state.set(result);
+        analyticsRecorder.record(result);
         eventPublisher.publishState(result);
         if (!allEvents.isEmpty()) {
             eventPublisher.publishEvents(allEvents);

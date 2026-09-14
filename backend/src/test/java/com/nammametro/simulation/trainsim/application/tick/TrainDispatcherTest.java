@@ -58,7 +58,7 @@ class TrainDispatcherTest {
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
         SimulationState state = new SimulationState(clock, List.of(scheduledTrainAt(1, "T1", 1, 12)), List.of(),
-                List.of(), PassengerMetrics.empty());
+                List.of(), PassengerMetrics.empty(), List.of());
 
         // Ticks 1 and 2 (elapsed 5s, 10s): still before the scheduled 12s departure.
         for (int i = 0; i < 2; i++) {

@@ -80,7 +80,8 @@ public class LineScheduleAssembler {
         }
 
         List<Signal> signals = network.allTracks().stream().map(track -> Signal.free(track.id())).toList();
-        SimulationState initial = new SimulationState(clock, trains, signals, List.of(), PassengerMetrics.empty());
+        SimulationState initial = new SimulationState(clock, trains, signals, List.of(), PassengerMetrics.empty(),
+                List.of());
         return new Assembled(initial, settings);
     }
 

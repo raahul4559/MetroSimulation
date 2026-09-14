@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
-import type { Signal, TrainState } from "@/domain/trainsim";
+import type { Passenger, PassengerMetrics, Signal, TrainState } from "@/domain/trainsim";
 import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
 import { buildProjector } from "@/lib/geometry/projection";
 import { viewBoxString } from "@/lib/geometry/layout";
 import { isStationVisible, shouldShowLabel } from "@/lib/metro/visibility";
 import { interpolateTrainPoint, signalAnchorPoint } from "@/lib/metro/trainPosition";
+import { buildStationQueueCounts } from "@/lib/metro/passengerDisplay";
 import { useMapViewport } from "@/hooks/useMapViewport";
 import { MetroLine } from "./MetroLine";
 import { StationMarker } from "./StationMarker";
@@ -25,6 +26,8 @@ interface MetroMapProps {
   tracks: readonly Track[];
   trains: readonly TrainState[];
   signals: readonly Signal[];
+  passengers: readonly Passenger[];
+  passengerMetrics: PassengerMetrics;
   connectionStatus: ConnectionStatus;
   hiddenLineCodes: ReadonlySet<string>;
   onToggleLine: (code: string) => void;
@@ -46,6 +49,8 @@ export function MetroMap({
   tracks,
   trains,
   signals,
+  passengers,
+  passengerMetrics,
   connectionStatus,
   hiddenLineCodes,
   onToggleLine,
@@ -66,6 +71,7 @@ export function MetroMap({
   );
   const lineByCode = useMemo(() => new Map(lines.map((line) => [line.code, line])), [lines]);
   const tracksById = useMemo(() => new Map(tracks.map((track) => [track.id, track])), [tracks]);
+  const stationQueueCounts = useMemo(() => buildStationQueueCounts(passengers), [passengers]);
 
   const { svgRef, scale, transform, zoomIn, zoomOut, fitNetwork, focusOn, panHandlers } =
     useMapViewport(VIEWPORT);
@@ -119,6 +125,7 @@ export function MetroMap({
                 point={project(station)}
                 scale={scale}
                 selected={station.id === selectedStationId}
+                waitingCount={stationQueueCounts.get(station.id) ?? 0}
                 onSelect={(s) => setSelectedStationId(s.id)}
               />
             ))}

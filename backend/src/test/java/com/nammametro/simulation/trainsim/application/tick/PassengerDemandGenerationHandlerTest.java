@@ -45,7 +45,7 @@ class PassengerDemandGenerationHandlerTest {
 
     private static SimulationState emptyState(Instant simTime) {
         SimulationClock clock = new SimulationClock(simTime, SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
-        return new SimulationState(clock, List.of(), List.of(), List.of(), PassengerMetrics.empty());
+        return new SimulationState(clock, List.of(), List.of(), List.of(), PassengerMetrics.empty(), List.of());
     }
 
     @Test

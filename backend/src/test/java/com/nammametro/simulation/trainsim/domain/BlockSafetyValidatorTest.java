@@ -74,7 +74,8 @@ class BlockSafetyValidatorTest {
         }
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 0, 0);
-        SimulationState state = new SimulationState(clock, trains, List.of(), List.of(), PassengerMetrics.empty());
+        SimulationState state = new SimulationState(clock, trains, List.of(), List.of(), PassengerMetrics.empty(),
+                List.of());
 
         List<String> allIssuesEverSeen = new ArrayList<>();
         int ticksUntilAllComplete = 0;

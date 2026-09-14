@@ -61,7 +61,7 @@ class PassengerBoardingHandlerTest {
     private static SimulationState stateWith(List<TrainState> trains, List<Passenger> passengers) {
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 5, 500);
-        return new SimulationState(clock, trains, List.of(), passengers, PassengerMetrics.empty());
+        return new SimulationState(clock, trains, List.of(), passengers, PassengerMetrics.empty(), List.of());
     }
 
     private static TickContext contextFor(MetroNetwork network) {
@@ -122,7 +122,7 @@ class PassengerBoardingHandlerTest {
         TrainState departed = new TrainState(100, "T100", "L1", TrainDirection.OUTBOUND, 1L, A, B,
                 0.1, 10, TrainStatus.RUNNING, 1, 10, 0, 0, 0, 30, 36.0, 1.0, 1.2);
         SimulationState secondTickInput = new SimulationState(afterFirstTick.clock(), List.of(departed), List.of(),
-                afterFirstTick.passengers(), afterFirstTick.passengerMetrics());
+                afterFirstTick.passengers(), afterFirstTick.passengerMetrics(), List.of());
         SimulationState afterSecondTick = HANDLER.handle(secondTickInput, contextFor(network)).state();
 
         assertThat(byId(afterSecondTick, 2).status()).isEqualTo(PassengerStatus.ON_TRAIN);
@@ -139,7 +139,7 @@ class PassengerBoardingHandlerTest {
 
         TrainState stillAtB = atStation(100, B, 0, 5);
         SimulationState secondTickInput = new SimulationState(afterFirstTick.clock(), List.of(stillAtB), List.of(),
-                afterFirstTick.passengers(), afterFirstTick.passengerMetrics());
+                afterFirstTick.passengers(), afterFirstTick.passengerMetrics(), List.of());
         SimulationState afterSecondTick = HANDLER.handle(secondTickInput, contextFor(network)).state();
 
         assertThat(afterSecondTick.passengers()).noneMatch(p -> p.id() == 9);

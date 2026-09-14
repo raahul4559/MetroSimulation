@@ -13,25 +13,30 @@ import java.util.List;
  * how long the simulation has been running.
  */
 public record SimulationState(SimulationClock clock, List<TrainState> trains, List<Signal> signals,
-                               List<Passenger> passengers, PassengerMetrics passengerMetrics) {
+                               List<Passenger> passengers, PassengerMetrics passengerMetrics,
+                               List<Disruption> disruptions) {
 
     public SimulationState withClock(SimulationClock newClock) {
-        return new SimulationState(newClock, trains, signals, passengers, passengerMetrics);
+        return new SimulationState(newClock, trains, signals, passengers, passengerMetrics, disruptions);
     }
 
     public SimulationState withTrains(List<TrainState> newTrains) {
-        return new SimulationState(clock, newTrains, signals, passengers, passengerMetrics);
+        return new SimulationState(clock, newTrains, signals, passengers, passengerMetrics, disruptions);
     }
 
     public SimulationState withSignals(List<Signal> newSignals) {
-        return new SimulationState(clock, trains, newSignals, passengers, passengerMetrics);
+        return new SimulationState(clock, trains, newSignals, passengers, passengerMetrics, disruptions);
     }
 
     public SimulationState withPassengers(List<Passenger> newPassengers) {
-        return new SimulationState(clock, trains, signals, newPassengers, passengerMetrics);
+        return new SimulationState(clock, trains, signals, newPassengers, passengerMetrics, disruptions);
     }
 
     public SimulationState withPassengerMetrics(PassengerMetrics newMetrics) {
-        return new SimulationState(clock, trains, signals, passengers, newMetrics);
+        return new SimulationState(clock, trains, signals, passengers, newMetrics, disruptions);
+    }
+
+    public SimulationState withDisruptions(List<Disruption> newDisruptions) {
+        return new SimulationState(clock, trains, signals, passengers, passengerMetrics, newDisruptions);
     }
 }
