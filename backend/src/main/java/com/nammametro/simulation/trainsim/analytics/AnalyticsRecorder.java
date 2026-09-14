@@ -3,6 +3,7 @@ package com.nammametro.simulation.trainsim.analytics;
 import com.nammametro.simulation.metro.domain.model.Station;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.domain.model.BlockState;
+import com.nammametro.simulation.trainsim.domain.model.Disruption;
 import com.nammametro.simulation.trainsim.domain.model.Passenger;
 import com.nammametro.simulation.trainsim.domain.model.PassengerMetrics;
 import com.nammametro.simulation.trainsim.domain.model.SimulationState;
@@ -93,9 +94,8 @@ public class AnalyticsRecorder {
         int onTimeTrainCount = 0;
         double sumSpeedKmph = 0;
         int movingTrainCount = 0;
-        long sumHeldSeconds = 0;
-        int heldTrainCount = 0;
-        int maxHeldSeconds = 0;
+        long sumDelaySeconds = 0;
+        int maxDelaySeconds = 0;
         double sumOccupancyFraction = 0;
         int occupancyTrainCount = 0;
 
@@ -105,12 +105,9 @@ public class AnalyticsRecorder {
                 continue;
             }
             activeTrainCount++;
-            boolean held = train.status() == TrainStatus.STOPPED || train.status() == TrainStatus.DELAYED;
-            if (held) {
-                sumHeldSeconds += train.heldSeconds();
-                heldTrainCount++;
-                maxHeldSeconds = Math.max(maxHeldSeconds, train.heldSeconds());
-            } else {
+            sumDelaySeconds += train.delaySeconds();
+            maxDelaySeconds = Math.max(maxDelaySeconds, train.delaySeconds());
+            if (train.delaySeconds() <= 0) {
                 onTimeTrainCount++;
             }
             if (train.status() == TrainStatus.DEPARTING || train.status() == TrainStatus.RUNNING) {
@@ -126,6 +123,7 @@ public class AnalyticsRecorder {
         int occupiedOrReserved = (int) state.signals().stream()
                 .filter(s -> s.blockState() != BlockState.FREE)
                 .count();
+        int activeDisruptions = (int) state.disruptions().stream().filter(Disruption::isActive).count();
 
         PassengerMetrics metrics = state.passengerMetrics();
 
@@ -133,9 +131,9 @@ public class AnalyticsRecorder {
                 state.clock().currentTick(),
                 state.clock().elapsedSimulationSeconds(),
                 state.clock().currentTime().getEpochSecond(),
-                totalTrainCount, activeTrainCount, onTimeTrainCount,
+                totalTrainCount, activeTrainCount, onTimeTrainCount, activeDisruptions,
                 sumSpeedKmph, movingTrainCount,
-                sumHeldSeconds, heldTrainCount, maxHeldSeconds,
+                sumDelaySeconds, maxDelaySeconds,
                 sumOccupancyFraction, occupancyTrainCount,
                 occupiedOrReserved, state.signals().size(),
                 metrics.totalGenerated(), metrics.totalServed(), metrics.totalUnableToBoard(),

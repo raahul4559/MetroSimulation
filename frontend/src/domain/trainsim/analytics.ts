@@ -37,6 +37,7 @@ export interface LiveMetrics {
     activeTrains: number;
     activeStations: number;
     networkUtilizationPct: number;
+    activeDisruptions: number;
   };
   trains: {
     avgSpeedKmph: number;

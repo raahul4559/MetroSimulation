@@ -12,6 +12,14 @@ package com.nammametro.simulation.trainsim.analytics;
  * fields verbatim — cumulative-since-reset counters, not per-tick deltas. A range's passenger totals
  * are the difference between the last sample in range and the first, which is why the raw cumulative
  * values (not deltas) are what gets stored here.
+ *
+ * <p>{@code sumDelaySeconds}/{@code maxDelaySeconds} are read from every active train's own
+ * {@code TrainState#delaySeconds()} — "seconds behind nominal schedule right now, 0 if on time,"
+ * recomputed live every tick by {@code TrainMovementTickHandler} — not derived from headway-hold
+ * state here, so a train that's still nominally late while back to {@code RUNNING} (recovering from
+ * an earlier hold) still counts. {@code sumDelaySeconds} is summed over every active train
+ * (including on-time ones at 0), so {@link #avgDelaySeconds()} divides by {@code activeTrainCount}
+ * rather than a separate held-train count.
  */
 public record TickSample(
         long tick,
@@ -21,13 +29,13 @@ public record TickSample(
         int totalTrainCount,
         int activeTrainCount,
         int onTimeTrainCount,
+        int activeDisruptions,
 
         double sumSpeedKmph,
         int movingTrainCount,
 
-        long sumHeldSeconds,
-        int heldTrainCount,
-        int maxHeldSeconds,
+        long sumDelaySeconds,
+        int maxDelaySeconds,
 
         double sumOccupancyFraction,
         int occupancyTrainCount,
@@ -47,8 +55,8 @@ public record TickSample(
         return movingTrainCount == 0 ? 0.0 : sumSpeedKmph / movingTrainCount;
     }
 
-    public double avgHeldSeconds() {
-        return heldTrainCount == 0 ? 0.0 : (double) sumHeldSeconds / heldTrainCount;
+    public double avgDelaySeconds() {
+        return activeTrainCount == 0 ? 0.0 : (double) sumDelaySeconds / activeTrainCount;
     }
 
     public double avgOccupancyFraction() {

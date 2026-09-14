@@ -19,13 +19,29 @@ function toLocalInputValue(date: Date): string {
 
 export function AnalyticsDashboard() {
   const [range, setRange] = useState<AnalyticsRange>("FULL");
-  const [customFromLocal, setCustomFromLocal] = useState(() => toLocalInputValue(new Date(Date.now() - 3600_000)));
-  const [customToLocal, setCustomToLocal] = useState(() => toLocalInputValue(new Date()));
+  // Left empty until we know the simulation's own clock (seeded below) — defaulting to wall-clock
+  // "now" would almost always fall outside the simulated range, since the sim clock runs on its own
+  // configured start time, not real time.
+  const [customFromLocal, setCustomFromLocal] = useState("");
+  const [customToLocal, setCustomToLocal] = useState("");
 
   const customFrom = customFromLocal ? new Date(customFromLocal).toISOString() : undefined;
   const customTo = customToLocal ? new Date(customToLocal).toISOString() : undefined;
 
   const { data, isLoading, error } = useAnalytics(range, customFrom, customTo);
+
+  useEffect(() => {
+    if (range !== "CUSTOM" || customFromLocal || customToLocal || !data) return;
+    // Deferred a microtask so this setState is async, not synchronous within the effect body
+    // (avoids react-hooks/set-state-in-effect) — see the same pattern in useAnalytics.
+    const simTime = data.meta.generatedAtSimTime;
+    Promise.resolve().then(() => {
+      const to = new Date(simTime);
+      const from = new Date(to.getTime() - 3600_000);
+      setCustomFromLocal(toLocalInputValue(from));
+      setCustomToLocal(toLocalInputValue(to));
+    });
+  }, [range, data, customFromLocal, customToLocal]);
 
   const congestionBars = useMemo(() => {
     if (!data) return [];
@@ -88,7 +104,7 @@ export function AnalyticsDashboard() {
         <div className="mb-2 flex items-center gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Network</h2>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatTile label="Active trains" value={formatCount(live.network.activeTrains)} sublabel="LIVE" />
           <StatTile label="Active stations" value={formatCount(live.network.activeStations)} sublabel="LIVE" />
           <StatTile label="Network utilization (now)" value={formatPct(live.network.networkUtilizationPct)} sublabel="LIVE" />
@@ -96,6 +112,12 @@ export function AnalyticsDashboard() {
             label="Network utilization (range avg)"
             value={formatPct(simulationResult.network.avgNetworkUtilizationPct)}
             sublabel="SIMULATION RESULT"
+          />
+          <StatTile
+            label="Active disruptions"
+            value={formatCount(live.network.activeDisruptions)}
+            sublabel="LIVE — why delays are happening"
+            tone={live.network.activeDisruptions > 0 ? "warning" : "good"}
           />
         </div>
       </section>
@@ -197,7 +219,7 @@ export function AnalyticsDashboard() {
 
           <ChartCard
             title="Delay over time"
-            subtitle="Average and maximum held-for-headway delay among trains currently held, per bucket"
+            subtitle="Average and maximum seconds behind schedule across active trains, per bucket"
             kind="HISTORICAL"
             tableHeaders={["Time", "Avg delay", "Max delay"]}
             tableRows={historical.delay.map((p) => [formatElapsed(p.elapsedSimulationSeconds), formatSeconds(p.avgDelaySeconds), formatSeconds(p.maxDelaySeconds)])}

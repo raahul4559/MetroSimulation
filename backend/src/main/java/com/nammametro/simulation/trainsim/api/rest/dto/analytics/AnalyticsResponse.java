@@ -49,7 +49,7 @@ public record AnalyticsResponse(
             List<StationLive> stations,
             List<WaitTimeBucket> passengerWaitHistogram
     ) {
-        public record Network(int activeTrains, int activeStations, double networkUtilizationPct) {
+        public record Network(int activeTrains, int activeStations, double networkUtilizationPct, int activeDisruptions) {
         }
 
         public record Trains(double avgSpeedKmph, double currentAvgDelaySeconds, double currentMaxDelaySeconds,

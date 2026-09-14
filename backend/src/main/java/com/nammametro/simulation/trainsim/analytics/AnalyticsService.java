@@ -5,6 +5,7 @@ import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.trainsim.api.rest.dto.analytics.AnalyticsResponse;
 import com.nammametro.simulation.trainsim.application.TrainSimulationControlUseCase;
 import com.nammametro.simulation.trainsim.domain.model.BlockState;
+import com.nammametro.simulation.trainsim.domain.model.Disruption;
 import com.nammametro.simulation.trainsim.domain.model.Passenger;
 import com.nammametro.simulation.trainsim.domain.model.PassengerStatus;
 import com.nammametro.simulation.trainsim.domain.model.SimulationClock;
@@ -111,12 +112,10 @@ public class AnalyticsService {
     private AnalyticsResponse.Live buildLive(SimulationState state) {
         int totalTrains = state.trains().size();
         int activeTrains = 0;
-        int onTimeTrains = 0;
+        double sumDelay = 0;
+        int maxDelay = 0;
         double sumSpeed = 0;
         int movingTrains = 0;
-        long sumHeld = 0;
-        int heldTrains = 0;
-        int maxHeld = 0;
         double sumOccupancy = 0;
         int occupancyTrains = 0;
 
@@ -126,14 +125,8 @@ public class AnalyticsService {
                 continue;
             }
             activeTrains++;
-            boolean held = t.status() == TrainStatus.STOPPED || t.status() == TrainStatus.DELAYED;
-            if (held) {
-                sumHeld += t.heldSeconds();
-                heldTrains++;
-                maxHeld = Math.max(maxHeld, t.heldSeconds());
-            } else {
-                onTimeTrains++;
-            }
+            sumDelay += t.delaySeconds();
+            maxDelay = Math.max(maxDelay, t.delaySeconds());
             if (t.status() == TrainStatus.DEPARTING || t.status() == TrainStatus.RUNNING) {
                 sumSpeed += t.speedKmph();
                 movingTrains++;
@@ -149,13 +142,14 @@ public class AnalyticsService {
                 .count();
         double networkUtilizationPct = state.signals().isEmpty() ? 0.0
                 : 100.0 * occupiedOrReserved / state.signals().size();
+        long activeDisruptions = state.disruptions().stream().filter(Disruption::isActive).count();
 
         AnalyticsResponse.Live.Network networkMetrics = new AnalyticsResponse.Live.Network(
-                activeTrains, network.allStations().size(), networkUtilizationPct);
+                activeTrains, network.allStations().size(), networkUtilizationPct, (int) activeDisruptions);
         AnalyticsResponse.Live.Trains trainsMetrics = new AnalyticsResponse.Live.Trains(
                 movingTrains == 0 ? 0.0 : sumSpeed / movingTrains,
-                heldTrains == 0 ? 0.0 : (double) sumHeld / heldTrains,
-                maxHeld,
+                activeTrains == 0 ? 0.0 : sumDelay / activeTrains,
+                maxDelay,
                 totalTrains == 0 ? 0.0 : 100.0 * activeTrains / totalTrains);
         double currentAvgOccupancyPct = occupancyTrains == 0 ? 0.0 : 100.0 * sumOccupancy / occupancyTrains;
 
@@ -219,9 +213,8 @@ public class AnalyticsService {
         int utilizationSamples = 0;
         double sumSpeed = 0;
         int movingTrainTicks = 0;
-        long sumHeld = 0;
-        int heldTrainTicks = 0;
-        int maxHeld = 0;
+        long sumDelay = 0;
+        int maxDelay = 0;
         long sumOnTime = 0;
         long sumActive = 0;
         double sumOccupancy = 0;
@@ -232,9 +225,8 @@ public class AnalyticsService {
             utilizationSamples++;
             sumSpeed += s.sumSpeedKmph();
             movingTrainTicks += s.movingTrainCount();
-            sumHeld += s.sumHeldSeconds();
-            heldTrainTicks += s.heldTrainCount();
-            maxHeld = Math.max(maxHeld, s.maxHeldSeconds());
+            sumDelay += s.sumDelaySeconds();
+            maxDelay = Math.max(maxDelay, s.maxDelaySeconds());
             sumOnTime += s.onTimeTrainCount();
             sumActive += s.activeTrainCount();
             sumOccupancy += s.sumOccupancyFraction();
@@ -246,8 +238,8 @@ public class AnalyticsService {
 
         AnalyticsResponse.SimulationResult.Trains trainsMetrics = new AnalyticsResponse.SimulationResult.Trains(
                 movingTrainTicks == 0 ? 0.0 : sumSpeed / movingTrainTicks,
-                heldTrainTicks == 0 ? 0.0 : (double) sumHeld / heldTrainTicks,
-                maxHeld,
+                sumActive == 0 ? 0.0 : (double) sumDelay / sumActive,
+                maxDelay,
                 sumActive == 0 ? 0.0 : 100.0 * sumOnTime / sumActive,
                 window.isEmpty() ? 0.0 : 100.0 * window.stream().mapToDouble(TickSample::trainUtilizationFraction).average().orElse(0));
 
@@ -326,12 +318,12 @@ public class AnalyticsService {
                     bucketEnd.elapsedSimulationSeconds(), simTime,
                     occupancyCount == 0 ? 0.0 : 100.0 * sumOccupancyFraction / occupancyCount));
 
-            long sumHeld = bucketSamples.stream().mapToLong(TickSample::sumHeldSeconds).sum();
-            int heldCount = bucketSamples.stream().mapToInt(TickSample::heldTrainCount).sum();
-            int maxHeld = bucketSamples.stream().mapToInt(TickSample::maxHeldSeconds).max().orElse(0);
+            long sumDelay = bucketSamples.stream().mapToLong(TickSample::sumDelaySeconds).sum();
+            int activeCount = bucketSamples.stream().mapToInt(TickSample::activeTrainCount).sum();
+            int maxDelay = bucketSamples.stream().mapToInt(TickSample::maxDelaySeconds).max().orElse(0);
             delay.add(new AnalyticsResponse.Historical.DelayPoint(
                     bucketEnd.elapsedSimulationSeconds(), simTime,
-                    heldCount == 0 ? 0.0 : (double) sumHeld / heldCount, maxHeld));
+                    activeCount == 0 ? 0.0 : (double) sumDelay / activeCount, maxDelay));
 
             double avgActive = bucketSamples.stream().mapToInt(TickSample::activeTrainCount).average().orElse(0);
             trainsOperating.add(new AnalyticsResponse.Historical.Point(
