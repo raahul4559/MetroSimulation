@@ -253,6 +253,44 @@ projection math is trivial to reason about and test. Stations still store real `
 `lib/geometry/projection.ts` is the one place that turns them into pixels, so a geographic (tile-based)
 renderer is an additive change later, not a data model change.
 
+## Station PA announcements: text and audio are separate pipelines
+
+Text generation is entirely frontend, and was built before audio was:
+`lib/station3d/announcementService.ts` derives structured `AnnouncementEvent`s from real
+`TrainPhase3D` transitions and active disruptions (never on a timer); `AnnouncementService.ts`
+resolves the operator's language(s) and hands each to `AnnouncementQueue`, which serializes
+playback (one language at a time, natural pauses, priority-based admission) so nothing ever
+overlaps; the actual sentences come from `lib/announcements/templates/{en,hi,kn}.ts` — natural
+per-language templates over real data, never a runtime translation of English, with station
+pronunciation kept separately (`config/stations/stationPronunciation.ts`:
+`displayName`/`englishSpeechName`/`hindiSpeechName`/`kannadaSpeechName` per station).
+
+Audio is a fourth backend vertical, `com.nammametro.simulation.announcement` (`application`/
+`infrastructure`/`api/rest`, same layering as `trainsim`). It knows nothing about templates or
+stations — it's a dumb `text+language -> audio/mpeg` synthesizer: `GoogleCloudTtsClient` calls
+Google Cloud TTS (SSML-wrapped for natural pauses, en-IN/hi-IN/kn-IN voices),
+`AudioProcessingService` shells out to `ffmpeg` for loudness normalization/compression/EQ/a
+subtle echo standing in for PA room coloring, and `AnnouncementAudioService` disk-caches the
+result keyed by `sha256(text|language|voice|processingChainVersion)` so the same sentence is
+never resynthesized — exposed at `POST /api/announcements/audio` (`204` when synthesis is
+unavailable — no credentials, network failure, missing `ffmpeg` — never a 500) and
+`GET /api/announcements/audio/manifest` (source/voice/license/timestamp per cached clip; there is
+no legally reusable real Namma Metro/BMRCL recording behind any of it).
+
+The frontend's `VoiceProvider.ts` bridges the two: `CachedAudioVoiceProvider` is what
+`AnnouncementQueue` actually calls — it fetches from the backend (browser `Cache Storage` in
+front of the network call), plays the clip through a small spatial/PA graph
+(`lib/audio/pa.ts`: fixed-position `PannerNode`, a synthetic-impulse `ConvolverNode` whose
+decay differs by the station's real `buildType` — UNDERGROUND vs. ELEVATED/AT_GRADE — and a
+gentle `DynamicsCompressorNode`, mixed into `AudioManager`'s existing master gain), and falls
+back to the browser's own Speech Synthesis API (`WebSpeechVoiceProvider`, the older,
+more-robotic-sounding default) whenever real audio genuinely isn't available. The on-screen
+caption is a third, independent fallback tier — `AnnouncementQueue` always emits it regardless
+of whether audio played, so missing audio degrades voice quality, never the announcement itself.
+`frontend/scripts/preload-announcement-audio.ts` (`npm run preload-audio`) warms the backend's
+cache for the common phrases ahead of time, reusing the same template-building code the running
+app uses rather than a second copy of the wording.
+
 ## Explicitly deferred
 
 Passenger demand/generation, capacity-aware boarding/alighting, delays/disruptions beyond headway

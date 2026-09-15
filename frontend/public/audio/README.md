@@ -16,7 +16,7 @@ them, and never label a synthesized file as an authentic recording.
 | `doors/close.mp3` | Door-closing chime |
 | `trains/rumble.mp3` | Train approach/departure movement sound |
 | `ambience/` | Reserved for a future station ambience loop (currently always synthesized) |
-| `announcements/` | Reserved for pre-recorded announcement clips — currently always synthesized speech via the browser's Speech Synthesis API, see below |
+| `announcements/` | Unused by design — see below |
 
 Adding a file at one of the `doors`/`trains` paths above is picked up automatically — no
 code change needed, `AudioManager` fetches it once, caches the decoded buffer, and prefers
@@ -24,12 +24,24 @@ it over the synthesized fallback.
 
 ## Spoken announcements
 
-Spoken PA announcements are a separate pipeline from the rest of this tree — they don't read
-from `announcements/` today. `frontend/src/lib/audio/VoiceProvider.ts` speaks text through the
-browser's own Speech Synthesis API, picking one Indian-accented voice per language (English,
-Hindi, Kannada — see `LanguageCode`) and reusing it consistently rather than re-picking at
-random. `frontend/src/lib/announcements/AnnouncementService.ts` is what builds that text, from
-natural per-language templates (`lib/announcements/templates/`) and real network data — never a
-literal runtime translation of English. To swap in a hosted/licensed TTS engine later, implement
-the `VoiceProvider` interface and swap the module's export; nothing else in the announcement
-pipeline needs to change.
+`announcements/` stays empty on purpose — spoken PA clips are **not** static files shipped in
+this repo. They're synthesized once (Google Cloud TTS), processed to sound like they're coming
+through a station PA system, and cached — but the cache lives on the **backend**
+(`backend/.../announcement/`, disk cache under `ANNOUNCEMENT_AUDIO_CACHE_DIR`), served over HTTP
+at `POST /api/announcements/audio`, and mirrored client-side in the browser's own `Cache Storage`
+(see `frontend/src/lib/audio/VoiceProvider.ts`'s `CachedAudioVoiceProvider`). Keeping one cache
+(backend disk + manifest) instead of also duplicating clips into this static folder avoids two
+copies of the same audio silently drifting out of sync with each other.
+
+`frontend/src/lib/announcements/AnnouncementService.ts` builds the text to speak from natural
+per-language templates (`lib/announcements/templates/`) and real network data — never a literal
+runtime translation of English. `VoiceProvider.ts`'s `CachedAudioVoiceProvider` is what turns that
+text into the cached, processed clip; it falls back to the browser's own Speech Synthesis API
+(the previous, more robotic-sounding default) whenever the backend has no credentials configured,
+is unreachable, or synthesis otherwise fails — never breaking the announcement, only its voice
+quality. See `docs/architecture.md` for the full pipeline and `npm run preload-audio` to warm the
+backend's cache ahead of time for the common phrases.
+
+Every synthesized clip's provenance (source, voice, license note, generation timestamp) is
+queryable at `GET /api/announcements/audio/manifest` — there is no legally reusable real Namma
+Metro/BMRCL recording behind any of this, and that stays visible rather than only true in code.
