@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+
+const QUERY = "(prefers-reduced-motion: reduce)";
 
 /**
  * Whether the operator has asked for reduced motion.
@@ -10,19 +12,20 @@ import { useEffect, useState } from "react";
  * map camera and the 2D→3D hand-off) are exactly that. Those need to read the preference in JS and
  * skip the animation outright rather than run it at zero duration.
  *
- * Starts `false` so server and client agree on the first render, then corrects on mount.
+ * `useSyncExternalStore` rather than an effect: the media query *is* an external store, and this
+ * is the primitive for subscribing to one. It also gives a clean server snapshot (`false`), so the
+ * first client render matches the server's instead of correcting itself a frame later.
  */
 export function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(query.matches);
-
-    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+  const subscribe = useCallback((onChange: () => void) => {
+    const query = window.matchMedia(QUERY);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
   }, []);
 
-  return reduced;
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(QUERY).matches,
+    () => false,
+  );
 }

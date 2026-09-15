@@ -1,23 +1,23 @@
-"use client";
-
-import Link from "next/link";
 import { AnalyticsDashboard } from "@/components/analytics/AnalyticsDashboard";
 
+export const metadata = {
+  title: "Analytics — Namma Metro",
+};
+
+/**
+ * Deliberately outside the `(live)` route group: analytics polls its own aggregated endpoint and
+ * has no use for the live train socket, so this route never opens one.
+ */
 export default function AnalyticsPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-        <div>
-          <h1 className="text-lg font-semibold">Analytics dashboard</h1>
-          <p className="text-xs text-slate-500">What&apos;s happening, why, and how severe — computed from live simulation state</p>
-        </div>
-        <Link href="/" className="text-sm text-blue-400 hover:text-blue-300">
-          ← Back to map
-        </Link>
+    <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 p-4 md:p-6">
+      <header>
+        <h1 className="text-xl font-semibold tracking-tight text-content">Analytics</h1>
+        <p className="mt-1 text-xs text-secondary">
+          What&apos;s happening, why, and how severe — computed from live simulation state.
+        </p>
       </header>
-      <main className="flex-1 p-4 md:p-6">
-        <AnalyticsDashboard />
-      </main>
-    </div>
+      <AnalyticsDashboard />
+    </main>
   );
 }

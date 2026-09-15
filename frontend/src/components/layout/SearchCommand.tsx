@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, TrainFront } from "lucide-react";
 import type { Station } from "@/domain/metro";
@@ -56,11 +56,15 @@ export function SearchCommand() {
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
-    else {
-      setQuery("");
-      setActiveIndex(0);
-    }
   }, [open]);
+
+  // Clearing on close happens in the handler rather than an effect: it is a consequence of the
+  // operator's action, not state that needs synchronising with anything external.
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setActiveIndex(0);
+  }, []);
 
   const results = useMemo<readonly Result[]>(() => {
     if (!network || !query.trim()) return [];
@@ -82,12 +86,12 @@ export function SearchCommand() {
     else selection.selectTrain(result.train.id);
     // Selecting only matters on the map, so make sure that is what the operator is looking at.
     router.push("/");
-    setOpen(false);
+    close();
   }
 
   function onInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
-      setOpen(false);
+      close();
       return;
     }
     if (event.key === "ArrowDown") {
@@ -131,7 +135,7 @@ export function SearchCommand() {
       {open && (
         <div
           className="fixed inset-0 z-[var(--z-toast)] flex items-start justify-center bg-black/50 p-4 pt-[12vh] backdrop-blur-[2px]"
-          onClick={() => setOpen(false)}
+          onClick={close}
         >
           <div
             role="dialog"
