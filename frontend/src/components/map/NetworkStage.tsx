@@ -98,7 +98,22 @@ export function NetworkStage() {
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    /*
+     * Fills `main` by being positioned against it, not by `h-full`.
+     *
+     * `h-full` is `height: 100%`, which needs a parent with a *definite* height to resolve against.
+     * The page's `main` is `flex-1` inside a `min-h-full` (not `h-full`) body, so its height comes
+     * from flex layout against an indefinite container — and the percentage collapsed to the
+     * height of this element's own content. Every child here is absolutely positioned, so that
+     * content height was zero: the map, the legend and the status card all rendered correctly and
+     * were then clipped out of existence by `overflow-hidden`. `main` is `relative`, so anchoring
+     * to it sizes this layer correctly no matter how `main` itself got its height.
+     *
+     * `absolute` still establishes a containing block for the absolutely positioned layers below,
+     * and — unlike a transform — leaves `position: fixed` descendants anchored to the viewport, so
+     * the station bottom sheet and its scrim stay put. See the map layer's own note on that.
+     */
+    <div className="absolute inset-0 overflow-hidden">
       {isMapMounted(immersion) && (
         <div
           className="absolute inset-0 transition-[opacity,transform,filter] duration-(--duration-cinematic) ease-(--ease-out)"
