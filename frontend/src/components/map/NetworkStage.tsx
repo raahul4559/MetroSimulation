@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import dynamic from "next/dynamic";
 import { buildProjector } from "@/lib/geometry/projection";
 import { MAP_VIEWPORT } from "@/lib/geometry/layout";
 import { centerOn } from "@/lib/geometry/viewport";
@@ -17,14 +18,24 @@ import {
 import { getStationConfig } from "@/config/stations/stationConfigs";
 import { useNetworkData, useSimulationData, useLineVisibilityContext, useTrainSelection } from "@/providers/SimulationProvider";
 import { useStationImmersion } from "@/hooks/useStationImmersion";
-import { useStationSceneLoad } from "@/hooks/useStationSceneLoad";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { MetroMap } from "./MetroMap";
 import { MapLegend } from "./MapLegend";
 import { NetworkStatusCard } from "./NetworkStatusCard";
-import { StationScene } from "@/components/station3d/StationScene";
-import { StationTransitionOverlay } from "@/components/station3d/StationTransitionOverlay";
+
+/**
+ * Code-split on purpose. `StationImmersionScene` is the one module that pulls in
+ * @react-three/fiber/@react-three/drei/three — importing it statically here would put the entire
+ * 3D stack in the plain network map's bundle, which is what nearly every visit to `/` actually
+ * wants and none of it needs. `ssr: false` because a WebGL canvas has nothing to render on the
+ * server anyway. The chunk fetch starts the instant the operator asks for 3D (see the render
+ * condition below), while the ~900ms camera zoom is still running.
+ */
+const StationImmersionScene = dynamic(
+  () => import("@/components/station3d/StationImmersionScene").then((m) => m.StationImmersionScene),
+  { ssr: false },
+);
 
 /**
  * The network view: the 2D map, the 3D station, and the cinematic hand-off between them.
@@ -65,8 +76,6 @@ export function NetworkStage() {
     () => (station ? getStationConfig(station, lines) : null),
     [station, lines],
   );
-
-  const sceneLoad = useStationSceneLoad({ config, phase: immersion.phase, sceneReady });
 
   /** How far each layer has travelled through the hand-off, 0..1. */
   const mapDepth = mapLayerProgress(immersion);
@@ -143,40 +152,25 @@ export function NetworkStage() {
         </div>
       )}
 
-      {station && isSceneMounted(immersion) && (
-        /*
-         * Never `hidden`, `display:none` or `visibility:hidden` while warming up. R3F's <Canvas>
-         * sizes itself from a resize observer on its parent; a zero-size parent yields a 0x0
-         * canvas that never runs useFrame, so the readiness signal never fires and the machine
-         * deadlocks in `preparing` until the bail-out timer rescues it. Laid out and transparent.
-         */
-        <div
-          className="absolute inset-0 transition-[opacity,transform] duration-(--duration-cinematic) ease-(--ease-out)"
-          style={
-            sceneDepth === 1
-              ? { opacity: 1, pointerEvents: immersion.phase === "immersed" ? "auto" : "none" }
-              : {
-                  opacity: sceneDepth,
-                  transform: `scale(${1.06 - sceneDepth * 0.06})`,
-                  pointerEvents: "none",
-                  willChange: "transform, opacity",
-                }
-          }
-          aria-hidden={immersion.phase !== "immersed"}
-        >
-          <StationScene
-            station={station}
-            lines={lines}
-            stations={stations}
-            trains={trains}
-            passengers={passengers}
-            disruptions={disruptions}
-            clock={clock}
-            onBack={exit}
-            onReady={onSceneReady}
-            chromeHidden={immersion.phase !== "immersed"}
-          />
-        </div>
+      {station && config && (isSceneMounted(immersion) || isTransitioning(immersion)) && (
+        <StationImmersionScene
+          station={station}
+          config={config}
+          lines={lines}
+          stations={stations}
+          trains={trains}
+          passengers={passengers}
+          disruptions={disruptions}
+          clock={clock}
+          phase={immersion.phase}
+          sceneReady={sceneReady}
+          onSceneReady={onSceneReady}
+          onBack={exit}
+          showScene={isSceneMounted(immersion)}
+          showOverlay={isTransitioning(immersion)}
+          sceneDepth={sceneDepth}
+          scrimOpacity={scrimOpacity(immersion)}
+        />
       )}
 
       {/*
@@ -195,16 +189,6 @@ export function NetworkStage() {
             isRunning={clock.status === "RUNNING"}
           />
         </div>
-      )}
-
-      {station && config && isTransitioning(immersion) && (
-        <StationTransitionOverlay
-          station={station}
-          config={config}
-          lines={lines}
-          load={sceneLoad}
-          opacity={scrimOpacity(immersion)}
-        />
       )}
     </div>
   );

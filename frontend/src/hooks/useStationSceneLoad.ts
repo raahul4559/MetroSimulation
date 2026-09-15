@@ -5,25 +5,12 @@ import { useProgress } from "@react-three/drei";
 import type { StationConfig } from "@/domain/stationConfig";
 import { checkAssetExists } from "@/lib/station3d/assetAvailability";
 import type { StationImmersionPhase } from "@/domain/stationImmersion";
+import { SCENE_LOAD_MESSAGE, type SceneLoadStage, type StationSceneLoad } from "@/lib/station3d/sceneLoad";
 
-export type SceneLoadStage = "locating" | "environment" | "architecture" | "entering";
-
-export interface StationSceneLoad {
-  /** 0..1, monotonic within one entry — never goes backwards, even if a source resets. */
-  readonly progress: number;
-  readonly stage: SceneLoadStage;
-  /** Every gate satisfied: assets resolved, model (if any) finished, first frames drawn. */
-  readonly ready: boolean;
-  /** No real model exists for this station — the scene is a procedural reconstruction. */
-  readonly procedural: boolean;
-}
-
-export const SCENE_LOAD_MESSAGE: Record<SceneLoadStage, string> = {
-  locating: "Locating station",
-  environment: "Resolving geographic environment",
-  architecture: "Building station architecture",
-  entering: "Entering platform",
-};
+// Re-exported for existing importers — the values now live in `lib/station3d/sceneLoad.ts` (see
+// that file for why), but nothing outside this pair of files needs to know that moved.
+export { SCENE_LOAD_MESSAGE };
+export type { SceneLoadStage, StationSceneLoad };
 
 /**
  * Where each stage's segment ends.

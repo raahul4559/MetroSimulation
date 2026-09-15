@@ -6,7 +6,7 @@ import { atmosphereFor } from "@/lib/station3d/atmosphere";
 import { getLinesForStation } from "@/lib/metro/selectors";
 import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { LineBadge } from "@/components/ui/LineBadge";
-import { SCENE_LOAD_MESSAGE, type StationSceneLoad } from "@/hooks/useStationSceneLoad";
+import { SCENE_LOAD_MESSAGE, type StationSceneLoad } from "@/lib/station3d/sceneLoad";
 
 const BUILD_TYPE_LABEL: Record<StationConfig["buildType"], string> = {
   ELEVATED: "Elevated station",
