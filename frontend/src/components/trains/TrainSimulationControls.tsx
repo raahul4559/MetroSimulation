@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { SimulationState } from "@/domain/trainsim";
 import { SIMULATION_SPEEDS } from "@/domain/trainsim";
 import { Button } from "@/components/ui/Button";
@@ -24,6 +25,24 @@ function timeOfDay(isoInstant: string): string {
   return date.toISOString().slice(11, 19);
 }
 
+function useRealDateTime(): Date {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return now;
+}
+
+function formatRealDateTime(date: Date): string {
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  });
+}
+
 export function TrainSimulationControls({
   state,
   isBusy,
@@ -33,6 +52,8 @@ export function TrainSimulationControls({
   onReset,
   onSetSpeed,
 }: TrainSimulationControlsProps) {
+  const realDateTime = useRealDateTime();
+
   if (!state) {
     return <p className="text-sm text-slate-500">Loading simulation state…</p>;
   }
@@ -49,6 +70,8 @@ export function TrainSimulationControls({
         </div>
         <StatusBadge label={clock.status} tone={STATUS_TONE[clock.status]} />
       </div>
+
+      <p className="text-xs text-slate-500">Real time: {formatRealDateTime(realDateTime)}</p>
 
       <div className="flex gap-2">
         <Button onClick={onStart} disabled={isBusy || isRunning}>

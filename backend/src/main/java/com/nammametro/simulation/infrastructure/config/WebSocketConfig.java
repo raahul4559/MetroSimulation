@@ -6,6 +6,7 @@ import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -26,5 +27,19 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/topic");
         registry.setApplicationDestinationPrefixes("/app");
+    }
+
+    /**
+     * Default send buffer limit is 512KB with a 10s send time limit — a client whose read side
+     * stalls for even a few seconds (backgrounded browser tab throttling timers, a slow network)
+     * falls behind the once-a-second full-state broadcast, the broker's per-session outbound queue
+     * backs up past the default, and Spring force-closes the session (observed in production logs
+     * as sessions dropping with buffered payloads up to ~8MB). Raising both limits gives a
+     * momentarily slow client room to catch up instead of being disconnected from live updates.
+     */
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.setSendBufferSizeLimit(2 * 1024 * 1024);
+        registration.setSendTimeLimit(20_000);
     }
 }
