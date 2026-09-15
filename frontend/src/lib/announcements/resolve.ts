@@ -1,4 +1,5 @@
 import type { AnnouncementData, LanguageCode } from "@/domain/announcement";
+import type { DisruptionType } from "@/domain/trainsim";
 import { resolveStationSpeechName } from "@/config/stations/stationPronunciation";
 
 /**
@@ -17,6 +18,7 @@ export interface ResolvedAnnouncementData {
   readonly delayMinutes: number;
   readonly transferLines: readonly string[] | null;
   readonly disruptionDescription: string | null;
+  readonly disruptionType: DisruptionType | null;
 }
 
 export function resolveAnnouncementData(data: AnnouncementData, language: LanguageCode): ResolvedAnnouncementData {
@@ -31,5 +33,6 @@ export function resolveAnnouncementData(data: AnnouncementData, language: Langua
     delayMinutes: Math.max(1, Math.round(data.delaySeconds / 60)),
     transferLines: data.transferLines,
     disruptionDescription: data.disruptionDescription,
+    disruptionType: data.disruptionType,
   };
 }

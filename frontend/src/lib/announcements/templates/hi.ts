@@ -1,5 +1,20 @@
 import type { AnnouncementType } from "@/domain/announcement";
+import type { DisruptionType } from "@/domain/trainsim";
 import type { ResolvedAnnouncementData } from "../resolve";
+
+/** Native-Hindi phrasing per {@link DisruptionType} — the *only* source for a Hindi
+ * `SERVICE_DISRUPTION` sentence. `disruptionDescription` is always operator-authored English free
+ * text; interpolating it here would read as English words dropped into a Hindi sentence, exactly
+ * what the spec's "no Hindi pronunciation generated from an English voice" warning is about, so it
+ * is never used in this file. */
+const disruptionTypeTemplates: Record<DisruptionType, string> = {
+  TRAIN_FAILURE: "एक ट्रेन में तकनीकी खराबी आ गई है",
+  SIGNAL_FAILURE: "इस लाइन पर सिग्नल में खराबी है",
+  STATION_CONGESTION: "इस स्टेशन पर अत्यधिक भीड़ है",
+  TRACK_BLOCKAGE: "आगे की पटरी अस्थायी रूप से अवरुद्ध है",
+  EXTENDED_DWELL: "आगे एक ट्रेन को सामान्य से अधिक समय के लिए रोका गया है",
+  CUSTOM_DELAY: "इस लाइन पर सेवाएं देरी से चल रही हैं",
+};
 
 /**
  * Natural Indian-Hindi metro PA phrasing (the register Delhi/Namma Metro's own Hindi announcements
@@ -33,8 +48,10 @@ export function buildHindiText(type: AnnouncementType, d: ResolvedAnnouncementDa
       return `यहाँ ${joinNatural(d.transferLines)} के लिए इंटरचेंज उपलब्ध है।`;
     case "DELAY":
       return `इस सेवा में लगभग ${d.delayMinutes} मिनट की देरी के लिए हमें खेद है। कृपया धैर्य बनाए रखें।`;
-    case "SERVICE_DISRUPTION":
-      return `कृपया ध्यान दें। ${d.disruptionDescription ?? "इस लाइन पर सेवा बाधित है।"} कृपया स्टेशन कर्मचारियों के निर्देशों का पालन करें।`;
+    case "SERVICE_DISRUPTION": {
+      const cause = d.disruptionType ? disruptionTypeTemplates[d.disruptionType] : "इस लाइन पर सेवा बाधित है";
+      return `कृपया ध्यान दें। ${cause}। कृपया स्टेशन कर्मचारियों के निर्देशों का पालन करें।`;
+    }
   }
 }
 

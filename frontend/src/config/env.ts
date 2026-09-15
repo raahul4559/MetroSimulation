@@ -20,5 +20,9 @@ export const env = {
     "NEXT_PUBLIC_TRAIN_SIM_API_BASE_URL",
     process.env.NEXT_PUBLIC_TRAIN_SIM_API_BASE_URL
   ),
+  announcementApiBaseUrl: requireEnv(
+    "NEXT_PUBLIC_ANNOUNCEMENT_API_BASE_URL",
+    process.env.NEXT_PUBLIC_ANNOUNCEMENT_API_BASE_URL
+  ),
   wsUrl: requireEnv("NEXT_PUBLIC_WS_URL", process.env.NEXT_PUBLIC_WS_URL),
 } as const;

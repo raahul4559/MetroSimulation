@@ -111,6 +111,7 @@ function makeTrainEvent(
     delaySeconds: visual.delaySeconds,
     transferLines: extra?.transferLines ?? null,
     disruptionDescription: extra?.disruptionDescription ?? null,
+    disruptionType: null,
   };
   return {
     id: `${visual.trainId}-${type}-${sequence}`,
@@ -163,6 +164,7 @@ export function deriveDisruptionAnnouncements(
         delaySeconds: 0,
         transferLines: null,
         disruptionDescription: disruption.description || null,
+        disruptionType: disruption.type,
       },
     });
   }

@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Announcement audio cache ###
+# Generated TTS clips + manifest sidecars — reproducible from source text, not source themselves.
+/data/audio-cache/

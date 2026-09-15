@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "preload-audio": "tsx scripts/preload-announcement-audio.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",
@@ -26,6 +27,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

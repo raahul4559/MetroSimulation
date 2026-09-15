@@ -1,5 +1,7 @@
 import { DEFAULT_AUDIO_SETTINGS, type AudioSettings } from "@/domain/announcement";
+import type { StationBuildType } from "@/domain/stationConfig";
 import { playChime, playRumble, startAmbienceLoop } from "./synth";
+import { createPaChain, updateListenerPosition, type PaChain } from "./pa";
 
 const STORAGE_KEY = "metrosim.audioSettings";
 
@@ -26,9 +28,18 @@ class AudioManagerImpl {
   private readonly listeners = new Set<(settings: AudioSettings) => void>();
   private ambience: { stop: () => void } | null = null;
   private readonly bufferCache = new Map<string, AudioBuffer | null>();
+  private acousticBuildType: StationBuildType = "AT_GRADE";
+  private paChain: { buildType: StationBuildType; chain: PaChain } | null = null;
 
   getSettings(): AudioSettings {
     return this.settings;
+  }
+
+  /** The shared `AudioContext`, for callers that need to decode audio themselves
+   * (`CachedAudioVoiceProvider`) — `null` before {@link ensureContext} has run. Exposed as a getter
+   * rather than handed out once, since it genuinely doesn't exist yet before the first user gesture. */
+  getContext(): AudioContext | null {
+    return this.ctx;
   }
 
   subscribe(listener: (settings: AudioSettings) => void): () => void {
@@ -79,6 +90,39 @@ class AudioManagerImpl {
     void this.playAssetOr(`/audio/trains/rumble.mp3`, ctx, destination, () =>
       playRumble(ctx, destination, durationSeconds, intensity)
     );
+  }
+
+  /** Which acoustic coloring spoken announcements should route through — set once per station (see
+   * `StationScene`'s effect keyed on `config.buildType`), read lazily by
+   * {@link getAnnouncementDestination} the next time something needs to speak. Never rebuilds the
+   * chain on every call: switching stations invalidates the cached chain via the `buildType`
+   * mismatch check there, nothing more eager than that. */
+  setAcousticContext(buildType: StationBuildType): void {
+    this.acousticBuildType = buildType;
+  }
+
+  /** The node a synthesized announcement clip should connect to — routes it through the PA
+   * processing graph (spatial position, room coloring, gentle compression; see `lib/audio/pa.ts`)
+   * before it ever reaches {@link masterGain}. `null` only when there's no `AudioContext` yet (before
+   * the first user gesture unlocks one via {@link ensureContext}) — callers treat that the same as
+   * "nothing to play through," never as an error. */
+  getAnnouncementDestination(): AudioNode | null {
+    if (!this.ctx || !this.masterGain) return null;
+    if (!this.paChain || this.paChain.buildType !== this.acousticBuildType) {
+      this.paChain = {
+        buildType: this.acousticBuildType,
+        chain: createPaChain(this.ctx, this.masterGain, this.acousticBuildType),
+      };
+    }
+    return this.paChain.chain.input;
+  }
+
+  /** Moves the PA graph's listener to track the 3D camera — see `AudioListenerSync`, which calls
+   * this throttled as the operator moves around a station, never every render frame. A no-op before
+   * the `AudioContext` exists. */
+  updateListenerPosition(position: readonly [number, number, number], forward: readonly [number, number, number]): void {
+    if (!this.ctx) return;
+    updateListenerPosition(this.ctx, position, forward);
   }
 
   /** Called when a station scene unmounts. Deliberately does not close the shared `AudioContext` —

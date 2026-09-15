@@ -15,6 +15,7 @@ import { atmosphereFor } from "@/lib/station3d/atmosphere";
 import { getStationConfig } from "@/config/stations/stationConfigs";
 import { StationModel } from "./StationModel";
 import { CameraController } from "./CameraController";
+import { AudioListenerSync } from "./AudioListenerSync";
 import { ReferencePanel } from "./ReferencePanel";
 import { useStationAsset } from "@/hooks/useStationAsset";
 import { useStationReferences } from "@/hooks/useStationReferences";
@@ -103,6 +104,13 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
   // not a fixed English string — `AnnouncementService` clears it itself the moment playback stops.
   useEffect(() => announcementService.subscribeCaption(setCaption), []);
 
+  // Tells the PA audio graph which acoustic coloring to use for this station (see `lib/audio/pa.ts`)
+  // — genuinely real per-station data (`config.buildType`), not a hardcoded announcement decision;
+  // the 3D scene still never builds announcement text or picks a voice itself.
+  useEffect(() => {
+    audioManager.setAcousticContext(config.buildType);
+  }, [config.buildType]);
+
   // Ambience/door/rumble sounds live on a module-level singleton so they survive this component
   // remounting on the next station — only stop the ambience loop, and any in-flight/queued
   // announcements, here.
@@ -176,6 +184,7 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
             buildType={config.buildType}
             resetToken={resetToken}
           />
+          <AudioListenerSync />
         </Suspense>
       </Canvas>
 

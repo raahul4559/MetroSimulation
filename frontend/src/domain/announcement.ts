@@ -1,4 +1,5 @@
 import type { TrainDirection } from "./trainsim/trainState";
+import type { DisruptionType } from "./trainsim/disruption";
 
 /**
  * A station-announcement trigger — always fired off a real transition or a real state fact in the
@@ -104,8 +105,16 @@ export interface AnnouncementData {
   /** Other lines' display names reachable by interchange at this station — populated only for
    * `TRANSFER`. */
   readonly transferLines: readonly string[] | null;
-  /** Plain-language description of an active disruption — populated only for `SERVICE_DISRUPTION`. */
+  /** Plain-language description of an active disruption — populated only for `SERVICE_DISRUPTION`.
+   * Always operator-authored English free text (see `CreateDisruptionRequest.description`), so it
+   * is only ever spoken in the English pass; see `disruptionType` for what Hindi/Kannada speak
+   * instead. */
   readonly disruptionDescription: string | null;
+  /** The disruption's fixed type — populated only for `SERVICE_DISRUPTION`. Every language builds
+   * its own natural sentence from this (see `templates/*.ts`'s `disruptionTypeTemplates`) rather
+   * than ever machine-translating `disruptionDescription`, which is real free text, not a station
+   * name or other bounded vocabulary a curated pronunciation table can cover. */
+  readonly disruptionType: DisruptionType | null;
 }
 
 export interface AnnouncementEvent {

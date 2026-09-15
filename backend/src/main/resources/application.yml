@@ -31,3 +31,14 @@ cors:
 simulation:
   tick-interval-ms: ${SIMULATION_TICK_INTERVAL_MS:1000}
   time-scale: ${SIMULATION_TIME_SCALE:1.0}
+
+announcement:
+  audio:
+    # Empty by default — the feature degrades gracefully (frontend falls back to browser speech
+    # synthesis, then text-only captions) until a real key is provided. See docs/architecture.md.
+    google-tts-api-key: ${GOOGLE_CLOUD_TTS_API_KEY:}
+    cache-dir: ${ANNOUNCEMENT_AUDIO_CACHE_DIR:./data/audio-cache}
+    ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
+    voice-en: ${GOOGLE_TTS_VOICE_EN:en-IN-Neural2-A}
+    voice-hi: ${GOOGLE_TTS_VOICE_HI:hi-IN-Neural2-A}
+    voice-kn: ${GOOGLE_TTS_VOICE_KN:kn-IN-Standard-A}

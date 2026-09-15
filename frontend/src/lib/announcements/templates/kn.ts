@@ -1,5 +1,19 @@
 import type { AnnouncementType } from "@/domain/announcement";
+import type { DisruptionType } from "@/domain/trainsim";
 import type { ResolvedAnnouncementData } from "../resolve";
+
+/** Native-Kannada phrasing per {@link DisruptionType} — the *only* source for a Kannada
+ * `SERVICE_DISRUPTION` sentence, for the same reason as `templates/hi.ts`'s equivalent table:
+ * `disruptionDescription` is always operator-authored English free text and must never be
+ * interpolated into a Kannada sentence. */
+const disruptionTypeTemplates: Record<DisruptionType, string> = {
+  TRAIN_FAILURE: "ಒಂದು ರೈಲಿನಲ್ಲಿ ತಾಂತ್ರಿಕ ದೋಷ ಕಂಡುಬಂದಿದೆ",
+  SIGNAL_FAILURE: "ಈ ಮಾರ್ಗದಲ್ಲಿ ಸಿಗ್ನಲ್ ದೋಷ ಉಂಟಾಗಿದೆ",
+  STATION_CONGESTION: "ಈ ನಿಲ್ದಾಣದಲ್ಲಿ ಹೆಚ್ಚಿನ ಜನಸಂದಣಿ ಇದೆ",
+  TRACK_BLOCKAGE: "ಮುಂದಿನ ಹಳಿ ತಾತ್ಕಾಲಿಕವಾಗಿ ಬಂದ್ ಆಗಿದೆ",
+  EXTENDED_DWELL: "ಮುಂದಿರುವ ರೈಲನ್ನು ಎಂದಿಗಿಂತ ಹೆಚ್ಚು ಸಮಯ ನಿಲ್ಲಿಸಲಾಗಿದೆ",
+  CUSTOM_DELAY: "ಈ ಮಾರ್ಗದಲ್ಲಿ ಸೇವೆಗಳು ವಿಳಂಬವಾಗಿ ಸಂಚರಿಸುತ್ತಿವೆ",
+};
 
 /**
  * Natural Bengaluru/Karnataka-Kannada metro PA phrasing, written independently for each
@@ -34,8 +48,10 @@ export function buildKannadaText(type: AnnouncementType, d: ResolvedAnnouncement
       return `ಇಲ್ಲಿ ${joinNatural(d.transferLines)} ಗೆ ಇಂಟರ್‌ಚೇಂಜ್ ಲಭ್ಯವಿದೆ.`;
     case "DELAY":
       return `ಈ ಸೇವೆಯಲ್ಲಿ ಸುಮಾರು ${d.delayMinutes} ನಿಮಿಷ ವಿಳಂಬವಾಗಿರುವುದಕ್ಕೆ ವಿಷಾದಿಸುತ್ತೇವೆ. ದಯವಿಟ್ಟು ಸಹಕರಿಸಿ.`;
-    case "SERVICE_DISRUPTION":
-      return `ಗಮನಿಸಿ. ${d.disruptionDescription ?? "ಈ ಮಾರ್ಗದಲ್ಲಿ ಸೇವಾ ವ್ಯತ್ಯಯ ಉಂಟಾಗಿದೆ."} ದಯವಿಟ್ಟು ನಿಲ್ದಾಣ ಸಿಬ್ಬಂದಿಯ ಸೂಚನೆಗಳನ್ನು ಅನುಸರಿಸಿ.`;
+    case "SERVICE_DISRUPTION": {
+      const cause = d.disruptionType ? disruptionTypeTemplates[d.disruptionType] : "ಈ ಮಾರ್ಗದಲ್ಲಿ ಸೇವಾ ವ್ಯತ್ಯಯ ಉಂಟಾಗಿದೆ";
+      return `ಗಮನಿಸಿ. ${cause}. ದಯವಿಟ್ಟು ನಿಲ್ದಾಣ ಸಿಬ್ಬಂದಿಯ ಸೂಚನೆಗಳನ್ನು ಅನುಸರಿಸಿ.`;
+    }
   }
 }
 

@@ -1,4 +1,6 @@
 import type { LanguageCode } from "@/domain/announcement";
+import { fetchAnnouncementAudio } from "@/lib/api/announcementAudio";
+import { audioManager } from "./AudioManager";
 
 export interface SpeakOptions {
   readonly volume: number;
@@ -142,4 +144,101 @@ function hasSpeechSynthesis(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-export const voiceProvider: VoiceProvider = new WebSpeechVoiceProvider();
+const CACHE_NAME = "announcement-audio-v1";
+
+/**
+ * The real fix for "sounds AI-generated": plays pre-synthesized, PA-processed clips from the
+ * backend's `AnnouncementAudioService` (Google Cloud TTS, cached, run through a PA-style ffmpeg
+ * filter chain — see `backend/.../announcement`) instead of the browser's own `speechSynthesis`.
+ * Falls back to {@link WebSpeechVoiceProvider} whenever real audio genuinely isn't available —
+ * no `AudioContext` yet, the backend returns `204` (no credentials configured, or synthesis
+ * failed), a network error, or a corrupt/undecodable clip — so a missing credential degrades the
+ * *voice quality*, never breaks the announcement entirely (spec §11).
+ *
+ * <p>A browser `Cache Storage` cache (`{@value CACHE_NAME}`) sits in front of the network call so
+ * the same sentence spoken twice in one session (a repeated `NEXT_STATION` phrase, say) never
+ * re-fetches — on top of the backend's own on-disk cache, this is belt-and-suspenders against the
+ * spec's "never generate a new AI voice recording every time a train arrives."
+ */
+class CachedAudioVoiceProvider implements VoiceProvider {
+  private readonly fallback: VoiceProvider = new WebSpeechVoiceProvider();
+  private currentSource: AudioBufferSourceNode | null = null;
+  private cachePromise: Promise<Cache | null> | null = null;
+
+  async speak(text: string, language: LanguageCode, opts: SpeakOptions): Promise<void> {
+    if (!text) return;
+
+    const ctx = audioManager.getContext();
+    const destination = audioManager.getAnnouncementDestination();
+    if (!ctx || !destination) {
+      return this.fallback.speak(text, language, opts);
+    }
+
+    const arrayBuffer = await this.loadAudio(text, language);
+    if (!arrayBuffer) {
+      return this.fallback.speak(text, language, opts);
+    }
+
+    try {
+      // `decodeAudioData` detaches its input in most engines — decode a copy so `arrayBuffer`
+      // (already cached, possibly still referenced elsewhere) is never silently neutered.
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      await this.play(ctx, destination, audioBuffer);
+    } catch {
+      await this.fallback.speak(text, language, opts);
+    }
+  }
+
+  cancelAll(): void {
+    this.currentSource?.stop();
+    this.currentSource = null;
+    this.fallback.cancelAll();
+  }
+
+  private play(ctx: AudioContext, destination: AudioNode, buffer: AudioBuffer): Promise<void> {
+    return new Promise((resolve) => {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(destination);
+      source.onended = () => {
+        if (this.currentSource === source) this.currentSource = null;
+        resolve();
+      };
+      this.currentSource = source;
+      source.start();
+    });
+  }
+
+  private async loadAudio(text: string, language: LanguageCode): Promise<ArrayBuffer | null> {
+    const cache = await this.openCache();
+    const request = cacheRequestFor(text, language);
+
+    if (cache) {
+      const cached = await cache.match(request);
+      if (cached) return cached.arrayBuffer();
+    }
+
+    const fetched = await fetchAnnouncementAudio(text, language);
+    if (fetched && cache) {
+      // Best-effort; a quota error here shouldn't block playing the clip we already have.
+      void cache.put(request, new Response(fetched.slice(0), { headers: { "Content-Type": "audio/mpeg" } })).catch(() => {});
+    }
+    return fetched;
+  }
+
+  private openCache(): Promise<Cache | null> {
+    if (typeof caches === "undefined") return Promise.resolve(null);
+    if (!this.cachePromise) {
+      this.cachePromise = caches.open(CACHE_NAME).catch(() => null);
+    }
+    return this.cachePromise;
+  }
+}
+
+function cacheRequestFor(text: string, language: LanguageCode): Request {
+  // Not a real endpoint — just a stable, content-addressed key for Cache Storage, which keys on
+  // Request rather than an arbitrary string.
+  return new Request(`https://announcement-audio.metrosim.local/${language}/${encodeURIComponent(text)}`);
+}
+
+export const voiceProvider: VoiceProvider = new CachedAudioVoiceProvider();
