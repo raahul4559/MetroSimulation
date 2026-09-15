@@ -87,25 +87,24 @@ export function TrainSimulationControls({
         <span className="h-7 w-px bg-divider" aria-hidden />
 
         <div className="flex items-center gap-0.5">
+          {/* size="md" is 44px on touch and 36px from `md` up — the transport controls are the
+              most-tapped thing in the app and must clear the touch-target minimum. */}
           <IconButton
             label={isRunning ? "Pause simulation" : "Start simulation"}
             icon={isRunning ? <Pause size={16} /> : <Play size={16} />}
             variant={isRunning ? "ghost" : "solid"}
-            size="sm"
             disabled={isBusy}
             onClick={isRunning ? onPause : onStart}
           />
           <IconButton
             label="Stop simulation"
             icon={<Square size={15} />}
-            size="sm"
             disabled={isBusy || !canStop}
             onClick={onStop}
           />
           <IconButton
             label="Reset simulation"
             icon={<RotateCcw size={15} />}
-            size="sm"
             disabled={isBusy}
             onClick={onReset}
           />

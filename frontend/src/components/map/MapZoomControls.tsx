@@ -25,28 +25,15 @@ export function MapZoomControls({ scale, onZoomIn, onZoomOut, onFitNetwork }: Ma
       padding="none"
       className="pointer-events-auto flex flex-col items-center gap-0.5 p-1"
     >
-      <IconButton
-        label="Zoom in"
-        icon={<Plus size={16} />}
-        size="sm"
-        onClick={onZoomIn}
-        tooltipSide="left"
-      />
+      <IconButton label="Zoom in" icon={<Plus size={16} />} onClick={onZoomIn} tooltipSide="left" />
       <span className="tabular px-1 text-[10px] text-muted" aria-hidden>
         {Math.round(scale * 100)}%
       </span>
-      <IconButton
-        label="Zoom out"
-        icon={<Minus size={16} />}
-        size="sm"
-        onClick={onZoomOut}
-        tooltipSide="left"
-      />
+      <IconButton label="Zoom out" icon={<Minus size={16} />} onClick={onZoomOut} tooltipSide="left" />
       <span className="my-0.5 h-px w-5 bg-divider" aria-hidden />
       <IconButton
         label="Fit network in view"
         icon={<Maximize2 size={15} />}
-        size="sm"
         onClick={onFitNetwork}
         tooltipSide="left"
       />

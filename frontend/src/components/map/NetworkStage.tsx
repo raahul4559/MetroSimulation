@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { buildProjector } from "@/lib/geometry/projection";
-import type { ViewTransform } from "@/lib/geometry/viewport";
 import { MAP_VIEWPORT } from "@/lib/geometry/layout";
 import { centerOn } from "@/lib/geometry/viewport";
 import {
@@ -22,6 +21,7 @@ import { useStationSceneLoad } from "@/hooks/useStationSceneLoad";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { MetroMap } from "./MetroMap";
+import { MapLegend } from "./MapLegend";
 import { NetworkStatusCard } from "./NetworkStatusCard";
 import { StationScene } from "@/components/station3d/StationScene";
 import { StationTransitionOverlay } from "@/components/station3d/StationTransitionOverlay";
@@ -59,13 +59,6 @@ export function NetworkStage() {
   const { immersion, cameraMove, sceneReady, enter, exit, onCameraMoveComplete, onSceneReady } =
     useStationImmersion(reducedMotion);
 
-  /**
-   * The map's framing at the moment 3D was requested, remembered by value rather than by keeping a
-   * hidden map mounted. A mounted-but-invisible map would keep re-rendering every train marker on
-   * every simulation tick behind an opaque canvas, for nothing.
-   */
-  const [returnTransform, setReturnTransform] = useState<ViewTransform | undefined>(undefined);
-
   const project = useMemo(() => buildProjector(stations, MAP_VIEWPORT), [stations]);
   const station = immersionStation(immersion);
   const config = useMemo(
@@ -74,6 +67,10 @@ export function NetworkStage() {
   );
 
   const sceneLoad = useStationSceneLoad({ config, phase: immersion.phase, sceneReady });
+
+  /** How far each layer has travelled through the hand-off, 0..1. */
+  const mapDepth = mapLayerProgress(immersion);
+  const sceneDepth = sceneLayerProgress(immersion);
 
   if (isLoading) {
     return (
@@ -95,12 +92,23 @@ export function NetworkStage() {
     <div className="relative h-full w-full overflow-hidden">
       {isMapMounted(immersion) && (
         <div
-          className="absolute inset-0 transition-[opacity,transform,filter] duration-(--duration-cinematic) ease-(--ease-out) will-change-transform"
-          style={{
-            opacity: 1 - mapLayerProgress(immersion) * 0.9,
-            transform: `scale(${1 + mapLayerProgress(immersion) * 0.12})`,
-            filter: `blur(${mapLayerProgress(immersion) * 8}px)`,
-          }}
+          className="absolute inset-0 transition-[opacity,transform,filter] duration-(--duration-cinematic) ease-(--ease-out)"
+          /*
+           * At rest this layer carries no transform and no filter at all, rather than an identity
+           * scale. A transform — even scale(1) — makes the element a containing block for its
+           * `position: fixed` descendants, which would silently re-anchor the station bottom sheet
+           * and its scrim to the map instead of the viewport.
+           */
+          style={
+            mapDepth === 0
+              ? { opacity: 1 }
+              : {
+                  opacity: 1 - mapDepth * 0.9,
+                  transform: `scale(${1 + mapDepth * 0.12})`,
+                  filter: `blur(${mapDepth * 8}px)`,
+                  willChange: "transform, opacity, filter",
+                }
+          }
           aria-hidden={immersion.phase !== "map"}
           inert={immersion.phase !== "map"}
         >
@@ -112,17 +120,23 @@ export function NetworkStage() {
             signals={signals}
             passengers={passengers}
             hiddenLineCodes={hiddenLineCodes}
-            onToggleLine={toggleLine}
             selectedTrainId={selectedTrainId}
             onSelectTrain={selectTrain}
             selectedStationId={selectedStationId}
             onSelectStation={selectStation}
             focusToken={focusToken}
-            onEnter3D={(target, from) => {
-              setReturnTransform(from);
-              enter(target, from, centerOn(project(target), IMMERSION_ENTER_SCALE, MAP_VIEWPORT));
-            }}
-            initialTransform={returnTransform}
+            onEnter3D={(target, from) =>
+              enter(target, from, centerOn(project(target), IMMERSION_ENTER_SCALE, MAP_VIEWPORT))
+            }
+            /*
+             * On the way back, the map re-mounts at the close framing the 3D view replaced, then
+             * eases out to where the operator actually had it. Mounting it at the *return* framing
+             * instead would mean there is nothing left to animate — the reverse move would be a
+             * cut, which is the thing this whole sequence exists to avoid.
+             */
+            initialTransform={
+              immersion.phase === "exit-zooming" ? immersion.enterTransform : undefined
+            }
             cameraMove={cameraMove}
             onCameraMoveComplete={onCameraMoveComplete}
           />
@@ -137,12 +151,17 @@ export function NetworkStage() {
          * deadlocks in `preparing` until the bail-out timer rescues it. Laid out and transparent.
          */
         <div
-          className="absolute inset-0 transition-[opacity,transform] duration-(--duration-cinematic) ease-(--ease-out) will-change-transform"
-          style={{
-            opacity: sceneLayerProgress(immersion),
-            transform: `scale(${1.06 - sceneLayerProgress(immersion) * 0.06})`,
-            pointerEvents: immersion.phase === "immersed" ? "auto" : "none",
-          }}
+          className="absolute inset-0 transition-[opacity,transform] duration-(--duration-cinematic) ease-(--ease-out)"
+          style={
+            sceneDepth === 1
+              ? { opacity: 1, pointerEvents: immersion.phase === "immersed" ? "auto" : "none" }
+              : {
+                  opacity: sceneDepth,
+                  transform: `scale(${1.06 - sceneDepth * 0.06})`,
+                  pointerEvents: "none",
+                  willChange: "transform, opacity",
+                }
+          }
           aria-hidden={immersion.phase !== "immersed"}
         >
           <StationScene
@@ -160,16 +179,21 @@ export function NetworkStage() {
         </div>
       )}
 
+      {/*
+        The map's own chrome column. Legend and status card share one stack rather than each
+        claiming the bottom-left corner independently — they used to overlap at narrow widths.
+        Hidden below `sm`, where the map needs every pixel and the bottom sheet covers this corner
+        anyway; the same line filter is always reachable from /operations.
+      */}
       {immersion.phase === "map" && (
-        <div className="pointer-events-none absolute bottom-3 left-3 sm:bottom-4 sm:left-4">
-          <div className="flex flex-col gap-2">
-            <NetworkStatusCard
-              stationCount={stations.length}
-              trains={trains}
-              disruptions={disruptions}
-              isRunning={clock.status === "RUNNING"}
-            />
-          </div>
+        <div className="pointer-events-none absolute bottom-3 left-3 hidden flex-col gap-2 sm:flex sm:bottom-4 sm:left-4">
+          <MapLegend lines={lines} hiddenLineCodes={hiddenLineCodes} onToggleLine={toggleLine} />
+          <NetworkStatusCard
+            stationCount={stations.length}
+            trains={trains}
+            disruptions={disruptions}
+            isRunning={clock.status === "RUNNING"}
+          />
         </div>
       )}
 

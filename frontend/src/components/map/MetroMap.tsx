@@ -18,7 +18,6 @@ import { StationLabel } from "./StationLabel";
 import { TrainMarker } from "./TrainMarker";
 import { SignalMarker } from "./SignalMarker";
 import { MapZoomControls } from "./MapZoomControls";
-import { MapLegend } from "./MapLegend";
 import { StationPanel } from "./StationPanel";
 
 interface MetroMapProps {
@@ -29,7 +28,6 @@ interface MetroMapProps {
   signals: readonly Signal[];
   passengers: readonly Passenger[];
   hiddenLineCodes: ReadonlySet<string>;
-  onToggleLine: (code: string) => void;
   selectedTrainId: number | null;
   onSelectTrain: (id: number | null) => void;
   selectedStationId: number | null;
@@ -53,8 +51,9 @@ interface MetroMapProps {
 
 /**
  * The primary interactive network map: renders lines, stations, labels, and live trains from
- * backend data, and owns pan/zoom (line visibility, train selection and station selection are
- * lifted to the caller so the roster, the search palette and the map all agree). No business logic
+ * backend data, and owns pan/zoom — and only pan/zoom. Line visibility, train selection and
+ * station selection are all lifted to the caller so the roster, the search palette and the map
+ * never disagree, and the map legend lives with the caller for the same reason. No business logic
  * lives here — projection, adjacency, visibility, and train-position interpolation all come from
  * `lib/geometry` and `lib/metro`.
  *
@@ -72,7 +71,6 @@ export function MetroMap({
   signals,
   passengers,
   hiddenLineCodes,
-  onToggleLine,
   selectedTrainId,
   onSelectTrain,
   selectedStationId,
@@ -138,11 +136,23 @@ export function MetroMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusToken, selectedTrainId]);
 
+  /**
+   * A station picked from the search palette is somewhere off screen, so the map has to go find
+   * it. A station clicked *on the map* is already under the operator's cursor — re-centring and
+   * zooming it there would yank the view out from under them for no reason. This ref is how the
+   * map tells the two apart: it records what it selected itself, and skips exactly that one.
+   */
+  const locallyPickedStationRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (selectedStationId == null || cameraMove) return;
+    if (locallyPickedStationRef.current === selectedStationId) {
+      locallyPickedStationRef.current = null;
+      return;
+    }
     const station = stationsById.get(selectedStationId);
-    if (station) focusOn(project(station), 2.4);
-    // Same as above: driven by the focus pulse, not by every render.
+    if (station) focusOn(project(station), 2.4, { animate: true, durationMs: 420 });
+    // Driven by the focus pulse, not by every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusToken, selectedStationId]);
 
@@ -187,7 +197,10 @@ export function MetroMap({
                 waitingCount={stationQueueCounts.get(station.id) ?? 0}
                 showDensity={preferences.densityVisible}
                 dimmed={isStationDimmed(station)}
-                onSelect={(s) => onSelectStation(s.id)}
+                onSelect={(s) => {
+                  locallyPickedStationRef.current = s.id;
+                  onSelectStation(s.id);
+                }}
               />
             ))}
 
@@ -232,10 +245,6 @@ export function MetroMap({
           })}
         </g>
       </svg>
-
-      <div className="pointer-events-none absolute bottom-3 left-3 sm:bottom-4 sm:left-4">
-        <MapLegend lines={lines} hiddenLineCodes={hiddenLineCodes} onToggleLine={onToggleLine} />
-      </div>
 
       <div className="pointer-events-none absolute right-3 top-3 sm:right-4 sm:top-4">
         <MapZoomControls

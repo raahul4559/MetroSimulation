@@ -13,7 +13,7 @@ export default function NetworkPage() {
   return (
     <main className="relative min-h-0 flex-1">
       <NetworkStage />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3 sm:p-4">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[var(--z-dock)] flex justify-center p-3 sm:p-4">
         <SimulationControlsDock />
       </div>
     </main>

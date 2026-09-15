@@ -86,6 +86,9 @@ export function useStationImmersion(reducedMotion: boolean): StationImmersionCon
   const onCameraMoveComplete = useCallback((token: number) => {
     if (awaitedTokenRef.current !== token) return;
     awaitedTokenRef.current = null;
+    // Clear the move once it has landed. Leaving it set would permanently suppress the map's own
+    // selection-focus behaviour, which treats "a move is in flight" as "do not touch the camera".
+    setCameraMove(undefined);
     setImmersion((current) => {
       if (current.phase === "zooming-in") return { ...current, phase: "preparing" };
       if (current.phase === "exit-zooming") return IMMERSION_MAP;
