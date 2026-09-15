@@ -83,7 +83,7 @@ public class PassengerDemandGenerationHandler implements TickHandler {
 
                 spawned.add(new Passenger(
                         nextId++, origin.id(), destination.id(), routeStationIds, 0,
-                        origin.id(), null, PassengerStatus.WAITING, nowSeconds, null, null));
+                        origin.id(), null, PassengerStatus.WAITING, nowSeconds, nowSeconds, null, null));
             }
         }
 

@@ -56,12 +56,19 @@ class PassengerBoardingHandlerTest {
 
     private static Passenger waiting(long id, long stationId, long destinationStationId, List<Long> route, int routeIndex) {
         return new Passenger(id, route.getFirst(), destinationStationId, route, routeIndex, stationId, null,
-                PassengerStatus.WAITING, 0, null, null);
+                PassengerStatus.WAITING, 0, 0, null, null);
     }
 
     private static SimulationState stateWith(List<TrainState> trains, List<Passenger> passengers) {
         SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
                 SimulationStatus.RUNNING, SimulationSpeed.NORMAL, 5, 500);
+        return new SimulationState(clock, trains, List.of(), passengers, PassengerMetrics.empty(), List.of());
+    }
+
+    private static SimulationState stateAtElapsed(long elapsedSeconds, List<TrainState> trains,
+                                                   List<Passenger> passengers) {
+        SimulationClock clock = new SimulationClock(Instant.parse("2026-01-01T05:00:00Z"),
+                SimulationStatus.RUNNING, SimulationSpeed.NORMAL, elapsedSeconds / 5, elapsedSeconds);
         return new SimulationState(clock, trains, List.of(), passengers, PassengerMetrics.empty(), List.of());
     }
 
@@ -75,7 +82,7 @@ class PassengerBoardingHandlerTest {
         TrainState train = atStation(100, B, 1, 1); // full: 1/1
 
         // P1 rode A->B and is at their final destination; P2 waits at B wanting to continue to C.
-        Passenger destB = new Passenger(1, A, B, List.of(A, B), 1, null, 100L, PassengerStatus.ON_TRAIN, 0, 0L, null);
+        Passenger destB = new Passenger(1, A, B, List.of(A, B), 1, null, 100L, PassengerStatus.ON_TRAIN, 0, 0, 0L, null);
         Passenger p2 = waiting(2, B, C, List.of(B, C), 0);
 
         SimulationState state = stateWith(List.of(train), List.of(destB, p2));
@@ -133,7 +140,7 @@ class PassengerBoardingHandlerTest {
     void aPassengerReachingFinalDestinationCompletesAndIsRemovedFromTheActiveRosterOnResolve() {
         MetroNetwork network = threeStationNetwork();
         TrainState train = atStation(100, B, 1, 5);
-        Passenger destB = new Passenger(9, A, B, List.of(A, B), 1, null, 100L, PassengerStatus.ON_TRAIN, 100, 100L, null);
+        Passenger destB = new Passenger(9, A, B, List.of(A, B), 1, null, 100L, PassengerStatus.ON_TRAIN, 100, 100, 100L, null);
 
         SimulationState afterFirstTick = HANDLER.handle(stateWith(List.of(train), List.of(destB)), contextFor(network)).state();
         assertThat(byId(afterFirstTick, 9).status()).isEqualTo(PassengerStatus.ALIGHTING);
@@ -146,6 +153,56 @@ class PassengerBoardingHandlerTest {
         assertThat(afterSecondTick.passengers()).noneMatch(p -> p.id() == 9);
         assertThat(afterSecondTick.passengerMetrics().totalServed()).isEqualTo(1);
         assertThat(afterSecondTick.passengerMetrics().totalJourneySeconds()).isEqualTo(400); // 500 - 100
+    }
+
+    @Test
+    void aPassengerWhoHasWaitedPastTheGiveUpThresholdLeavesTheRosterInsteadOfAccumulating() {
+        MetroNetwork network = threeStationNetwork();
+        Passenger strandedAtA = waiting(2, A, C, List.of(A, B, C), 0); // waiting since t=0
+
+        // No train at all: exactly the post-last-departure regime the seeded timetable ends in.
+        SimulationState justUnder = HANDLER.handle(stateAtElapsed(1800, List.of(), List.of(strandedAtA)),
+                contextFor(network)).state();
+        assertThat(justUnder.passengers()).hasSize(1);
+        assertThat(justUnder.passengerMetrics().totalUnableToBoard()).isZero();
+
+        SimulationState justOver = HANDLER.handle(stateAtElapsed(1801, List.of(), List.of(strandedAtA)),
+                contextFor(network)).state();
+        assertThat(justOver.passengers()).isEmpty();
+        assertThat(justOver.passengerMetrics().totalUnableToBoard()).isEqualTo(1);
+    }
+
+    @Test
+    void aTransferringPassengerIsJudgedOnTheConnectionWaitNotTheirWholeTimeInTheSystem() {
+        MetroNetwork network = threeStationNetwork();
+        TrainState train = atStation(100, B, 1, 5);
+
+        // Boarded at A at t=0, still riding at t=5000 — already far past the give-up threshold in
+        // total time in system, but they have not waited on a platform for any of it.
+        Passenger toC = new Passenger(7, A, C, List.of(A, B, C), 1, null, 100L, PassengerStatus.ON_TRAIN, 0, 0, 0L, null);
+
+        SimulationState afterAlight = HANDLER.handle(stateAtElapsed(5000, List.of(train), List.of(toC)),
+                contextFor(network)).state();
+        assertThat(byId(afterAlight, 7).status()).isEqualTo(PassengerStatus.ALIGHTING);
+
+        // Resolving that alight makes them a TRANSFER and restarts their wait clock at t=5000. No
+        // train is present on this tick — with the B->C train still standing there they would just
+        // board it immediately, which is correct behaviour but not what this test is pinning down.
+        SimulationState resolved = HANDLER.handle(stateAtElapsed(5000, List.of(),
+                afterAlight.passengers()), contextFor(network)).state();
+        Passenger transferring = byId(resolved, 7);
+        assertThat(transferring.status()).isEqualTo(PassengerStatus.TRANSFER);
+        assertThat(transferring.waitingSinceSeconds()).isEqualTo(5000);
+
+        // Survives a tick well past their original spawn-relative threshold...
+        SimulationState stillWaiting = HANDLER.handle(stateAtElapsed(6000, List.of(), resolved.passengers()),
+                contextFor(network)).state();
+        assertThat(stillWaiting.passengers()).hasSize(1);
+
+        // ...and is only given up on once the connection itself has taken too long.
+        SimulationState givenUp = HANDLER.handle(stateAtElapsed(6801, List.of(), resolved.passengers()),
+                contextFor(network)).state();
+        assertThat(givenUp.passengers()).isEmpty();
     }
 
     private static Passenger byId(SimulationState state, long id) {

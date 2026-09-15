@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,25 @@ import java.util.Map;
  * or direction.
  */
 public class PassengerBoardingHandler implements TickHandler {
+
+    /**
+     * How long a passenger will stand on a platform before giving up and leaving the network,
+     * in simulated seconds.
+     *
+     * <p>This is what actually enforces {@code SimulationState}'s promise that the passenger roster
+     * "stays bounded by how many people are currently mid-journey". Without it the roster is not
+     * bounded at all: demand generation spawns riders at every station for as long as the clock
+     * runs, while the seeded timetable dispatches its whole fleet inside the first ten minutes of
+     * service (see {@code V4__add_line_schedules.sql}) — so every passenger spawned after the last
+     * train has gone waits forever, is re-counted as "unable to board" every tick, and is still
+     * carried in the full state broadcast once a second. That grows without limit until the heap
+     * is gone, which is precisely how the deployed backend died.
+     *
+     * <p>Six times the seeded 300s headway: long enough that nobody with a train actually coming is
+     * ever given up on, short enough that the never-served backlog settles at a bounded size
+     * (arrival rate x this window) instead of accumulating for the life of the run.
+     */
+    private static final long MAX_PLATFORM_WAIT_SECONDS = 1800;
 
     @Override
     public TickResult handle(SimulationState current, TickContext ctx) {
@@ -118,8 +138,12 @@ public class PassengerBoardingHandler implements TickHandler {
             }
         }
 
-        if (unableToBoard > 0) {
-            metrics = metrics.withUnableToBoard(unableToBoard);
+        // Runs after every boarding attempt above, so a passenger a train takes on this very tick is
+        // never given up on for having been at the threshold when the tick began.
+        long abandoned = removeGiveUps(byId, nowSeconds);
+
+        if (unableToBoard + abandoned > 0) {
+            metrics = metrics.withUnableToBoard(unableToBoard + abandoned);
         }
 
         List<TrainState> updatedTrains = current.trains().stream()
@@ -133,6 +157,24 @@ public class PassengerBoardingHandler implements TickHandler {
                 .withPassengers(List.copyOf(byId.values()))
                 .withPassengerMetrics(metrics);
         return TickResult.noEvents(result);
+    }
+
+    /** Drops every passenger still stood on a platform past {@link #MAX_PLATFORM_WAIT_SECONDS},
+     * returning how many left. Purely a function of simulated time, so it costs the engine none of
+     * its determinism. A rider who gives up never boarded, so they fold into the same
+     * {@code totalUnableToBoard} counter that a capacity denial does. */
+    private long removeGiveUps(Map<Long, Passenger> byId, long nowSeconds) {
+        long abandoned = 0;
+        Iterator<Passenger> it = byId.values().iterator();
+        while (it.hasNext()) {
+            Passenger p = it.next();
+            if ((p.status() == PassengerStatus.WAITING || p.status() == PassengerStatus.TRANSFER)
+                    && p.waitedSeconds(nowSeconds) > MAX_PLATFORM_WAIT_SECONDS) {
+                it.remove();
+                abandoned++;
+            }
+        }
+        return abandoned;
     }
 
     /** Resolves every passenger left in a transitional state ({@code BOARDING}/{@code ALIGHTING})
@@ -150,7 +192,7 @@ public class PassengerBoardingHandler implements TickHandler {
                         long journey = nowSeconds - p.arrivalTimeSeconds();
                         metrics = metrics.withCompletedJourney(wait, travel, journey);
                     } else {
-                        byId.put(p.id(), p.withStatus(PassengerStatus.TRANSFER));
+                        byId.put(p.id(), p.transferring(nowSeconds));
                     }
                 }
                 case BOARDING -> byId.put(p.id(), p.withStatus(PassengerStatus.ON_TRAIN));

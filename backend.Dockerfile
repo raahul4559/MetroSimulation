@@ -29,4 +29,9 @@ WORKDIR /app
 COPY --from=build /workspace/backend/target/*.jar app.jar
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# The JVM otherwise sizes its heap at 25% of the container limit, leaving most of the instance
+# unused while the simulation's once-a-second full-state broadcast works within a needlessly tight
+# ceiling. Crash early and visibly on a genuine leak rather than grinding in an endless
+# OutOfMemoryError loop that still answers the health check while serving nothing (which is exactly
+# how this service failed before).
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]

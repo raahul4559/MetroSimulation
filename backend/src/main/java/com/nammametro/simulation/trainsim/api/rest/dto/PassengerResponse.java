@@ -13,6 +13,7 @@ public record PassengerResponse(
         Long currentTrainId,
         String status,
         long arrivalTimeSeconds,
+        long waitingSinceSeconds,
         Long boardingTimeSeconds,
         Long completionTimeSeconds
 ) {
@@ -27,6 +28,7 @@ public record PassengerResponse(
                 passenger.currentTrainId(),
                 passenger.status().name(),
                 passenger.arrivalTimeSeconds(),
+                passenger.waitingSinceSeconds(),
                 passenger.boardingTimeSeconds(),
                 passenger.completionTimeSeconds()
         );

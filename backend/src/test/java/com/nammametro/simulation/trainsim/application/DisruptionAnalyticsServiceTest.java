@@ -33,7 +33,7 @@ class DisruptionAnalyticsServiceTest {
 
     private static Passenger waitingAt(long id, long stationId) {
         return new Passenger(id, stationId, 99, List.of(stationId, 99L), 0, stationId, null,
-                PassengerStatus.WAITING, 0, null, null);
+                PassengerStatus.WAITING, 0, 0, null, null);
     }
 
     private static SimulationState stateWith(List<TrainState> trains, List<Passenger> passengers,

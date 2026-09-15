@@ -18,6 +18,11 @@ export interface Passenger {
   readonly currentTrainId: number | null;
   readonly status: PassengerStatus;
   readonly arrivalTimeSeconds: number;
+  /** When this rider's *current* platform wait began: their arrival time while `WAITING` for a
+   * first train, re-stamped to the moment they alight whenever they become a `TRANSFER`. The
+   * backend gives up on anyone waiting past its threshold, folding them into
+   * `PassengerMetrics.totalUnableToBoard` — which is what keeps this roster bounded. */
+  readonly waitingSinceSeconds: number;
   readonly boardingTimeSeconds: number | null;
   readonly completionTimeSeconds: number | null;
 }

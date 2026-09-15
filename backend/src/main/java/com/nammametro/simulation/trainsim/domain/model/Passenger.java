@@ -17,6 +17,13 @@ import java.util.List;
  * they've arrived) — so alighting is a single index comparison, not a re-walk of the route every
  * tick.
  *
+ * <p>{@code waitingSinceSeconds} is when this passenger's <em>current</em> platform wait began:
+ * their spawn time while {@code WAITING} for a first train, re-stamped to the moment they alight
+ * whenever they become a {@code TRANSFER}. It exists so "how long has this person been waiting for
+ * a train that is not coming" can be answered without conflating it with time already spent riding
+ * — see {@code PassengerBoardingHandler}'s abandonment rule, which is what keeps the active roster
+ * bounded.
+ *
  * <p>Exactly one of {@code currentStationId}/{@code currentTrainId} is non-null at a time: at a
  * station (WAITING/BOARDING/ALIGHTING/TRANSFER/COMPLETED) it's the station; ON_TRAIN it's the train.
  * {@code arrivalTimeSeconds}/{@code boardingTimeSeconds}/{@code completionTimeSeconds} are all
@@ -34,6 +41,7 @@ public record Passenger(
         Long currentTrainId,
         PassengerStatus status,
         long arrivalTimeSeconds,
+        long waitingSinceSeconds,
         Long boardingTimeSeconds,
         Long completionTimeSeconds
 ) {
@@ -44,8 +52,23 @@ public record Passenger(
 
     public Passenger withStatus(PassengerStatus newStatus) {
         return new Passenger(id, originStationId, destinationStationId, route, routeIndex,
-                currentStationId, currentTrainId, newStatus, arrivalTimeSeconds, boardingTimeSeconds,
-                completionTimeSeconds);
+                currentStationId, currentTrainId, newStatus, arrivalTimeSeconds, waitingSinceSeconds,
+                boardingTimeSeconds, completionTimeSeconds);
+    }
+
+    /** Seconds this passenger has been stood on a platform waiting for their next train. Only
+     * meaningful while {@code WAITING}/{@code TRANSFER} — see {@code waitingSinceSeconds}. */
+    public long waitedSeconds(long nowSeconds) {
+        return nowSeconds - waitingSinceSeconds;
+    }
+
+    /** Alighted mid-route and now waiting for a connection: the wait clock restarts here, so a
+     * transferring rider is judged on how long <em>this</em> connection has taken, not on how long
+     * they have been in the system overall. */
+    public Passenger transferring(long nowSeconds) {
+        return new Passenger(id, originStationId, destinationStationId, route, routeIndex,
+                currentStationId, currentTrainId, PassengerStatus.TRANSFER, arrivalTimeSeconds,
+                nowSeconds, boardingTimeSeconds, completionTimeSeconds);
     }
 
     /** Boards {@code trainId}, advancing {@code routeIndex} to {@code alightRouteIndex} (the next
@@ -53,19 +76,20 @@ public record Passenger(
     public Passenger boarding(long trainId, int alightRouteIndex, long nowSeconds) {
         return new Passenger(id, originStationId, destinationStationId, route, alightRouteIndex,
                 null, trainId, PassengerStatus.BOARDING,
-                arrivalTimeSeconds, boardingTimeSeconds == null ? nowSeconds : boardingTimeSeconds,
+                arrivalTimeSeconds, waitingSinceSeconds,
+                boardingTimeSeconds == null ? nowSeconds : boardingTimeSeconds,
                 completionTimeSeconds);
     }
 
     public Passenger alighting(long stationId) {
         return new Passenger(id, originStationId, destinationStationId, route, routeIndex,
-                stationId, null, PassengerStatus.ALIGHTING, arrivalTimeSeconds, boardingTimeSeconds,
-                completionTimeSeconds);
+                stationId, null, PassengerStatus.ALIGHTING, arrivalTimeSeconds, waitingSinceSeconds,
+                boardingTimeSeconds, completionTimeSeconds);
     }
 
     public Passenger completed(long nowSeconds) {
         return new Passenger(id, originStationId, destinationStationId, route, routeIndex,
-                currentStationId, null, PassengerStatus.COMPLETED, arrivalTimeSeconds, boardingTimeSeconds,
-                nowSeconds);
+                currentStationId, null, PassengerStatus.COMPLETED, arrivalTimeSeconds, waitingSinceSeconds,
+                boardingTimeSeconds, nowSeconds);
     }
 }
