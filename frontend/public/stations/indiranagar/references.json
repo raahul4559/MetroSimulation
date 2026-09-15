@@ -1,0 +1,31 @@
+{
+  "stationId": "indiranagar",
+  "stationName": "Indiranagar",
+  "line": ["PURPLE"],
+  "stationType": "elevated",
+  "references": {
+    "exterior": ["https://en.wikipedia.org/wiki/Indira_Nagar_metro_station_(Bengaluru)"],
+    "platform": ["https://en.wikipedia.org/wiki/Indira_Nagar_metro_station_(Bengaluru)"],
+    "concourse": [],
+    "entrance": ["https://en.wikipedia.org/wiki/Indira_Nagar_metro_station_(Bengaluru)"],
+    "signage": [],
+    "surroundings": ["https://en.wikipedia.org/wiki/Indira_Nagar_metro_station_(Bengaluru)"]
+  },
+  "sourceUrls": ["https://en.wikipedia.org/wiki/Indira_Nagar_metro_station_(Bengaluru)"],
+  "sources": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Indira_Nagar_metro_station_(Bengaluru)",
+      "title": "Indira Nagar metro station (Bengaluru)",
+      "publisher": "Wikipedia",
+      "retrievedOn": "2026-09-15",
+      "usageNote": "Article text and infobox facts only (CC BY-SA 4.0) — opening date, structure type, entrance count/labels. No photographs viewed or reproduced from this or any other source."
+    }
+  ],
+  "referenceNotes": [
+    "Supported by the source: elevated structure on the Purple Line's east-west corridor, CMH Road / 100 Feet Road location, opened 20 October 2011 as one of the first six stations, three entry/exit points (A/B/C toward Raghavendra Swamy Mutt and ESI Hospital), side-platform arrangement (2 platforms, 2 tracks).",
+    "NOT supported by any source consulted, and therefore not claimed as accurate: exact roof/canopy form, column spacing, materials, paint scheme, or entrance canopy design. These are architecturally reasonable estimations consistent with early-phase Namma Metro elevated stations, not verified detail.",
+    "Renderer limitation, disclosed rather than hidden: the shared platform layout engine only builds island platforms, so this station's real side-platform arrangement is approximated as a single island module.",
+    "No image files were downloaded, scraped, or embedded — this dataset stores link-only pointers to publicly viewable pages, gathered by reading their text content."
+  ],
+  "referenceConfidence": "high"
+}

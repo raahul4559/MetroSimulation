@@ -1,0 +1,52 @@
+{
+  "stationId": "rv-road",
+  "stationName": "RV Road",
+  "line": ["GREEN", "YELLOW"],
+  "stationType": "elevated",
+  "references": {
+    "exterior": [],
+    "platform": [
+      "https://en.wikipedia.org/wiki/Rashtreeya_Vidyalaya_Road_metro_station",
+      "https://bengalurumetro.in/stations/rashtreeya-vidyalaya-road-metro-station.html"
+    ],
+    "concourse": ["https://www.deccanherald.com/amp/story/india%2Fkarnataka%2Fbengaluru%2Fbengalurus-rv-road-metro-station-gets-handrail-barricades-to-prevent-accidents-3689921"],
+    "entrance": [],
+    "signage": [],
+    "surroundings": ["https://en.wikipedia.org/wiki/Rashtreeya_Vidyalaya_Road_metro_station"]
+  },
+  "sourceUrls": [
+    "https://en.wikipedia.org/wiki/Rashtreeya_Vidyalaya_Road_metro_station",
+    "https://bengalurumetro.in/stations/rashtreeya-vidyalaya-road-metro-station.html",
+    "https://www.deccanherald.com/amp/story/india%2Fkarnataka%2Fbengaluru%2Fbengalurus-rv-road-metro-station-gets-handrail-barricades-to-prevent-accidents-3689921"
+  ],
+  "sources": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Rashtreeya_Vidyalaya_Road_metro_station",
+      "title": "Rashtreeya Vidyalaya Road metro station",
+      "publisher": "Wikipedia",
+      "retrievedOn": "2026-09-15",
+      "usageNote": "Article text and infobox facts only (CC BY-SA 4.0) — elevated structure, 4 platforms over 2 levels, opening dates, contractor. No photographs viewed or reproduced."
+    },
+    {
+      "url": "https://bengalurumetro.in/stations/rashtreeya-vidyalaya-road-metro-station.html",
+      "title": "Rashtreeya Vidyalaya Road Metro Station — Green Line",
+      "publisher": "bengalurumetro.in (unofficial rider information site)",
+      "retrievedOn": "2026-09-15",
+      "usageNote": "Page text only, for corroborating platform/direction facts. Not an official BMRCL source; treated as a secondary corroboration, not primary evidence."
+    },
+    {
+      "url": "https://www.deccanherald.com/amp/story/india%2Fkarnataka%2Fbengaluru%2Fbengalurus-rv-road-metro-station-gets-handrail-barricades-to-prevent-accidents-3689921",
+      "title": "Bengaluru's RV Road metro station gets handrail barricades to prevent accidents",
+      "publisher": "Deccan Herald",
+      "retrievedOn": "2026-09-15",
+      "usageNote": "News article text only, for corroborating real high-traffic interchange/crowding conditions at the concourse level. No photographs reproduced."
+    }
+  ],
+  "referenceNotes": [
+    "Supported by sources: elevated interchange between the Green Line (North-South corridor, opened 2017) and the Yellow Line (East-West corridor, opened 2025) — the two viaducts cross perpendicular to each other here. Four platforms across two elevated levels; Green-to-Yellow passengers change level via the concourse. High interchange traffic (~20,000 daily interchange riders) has required added handrail barricades.",
+    "NOT supported, and not claimed as accurate: exact entrance count/positions, canopy design, or colour/material detail — one search pass found no source describing RV Road's architectural appearance in that level of detail (unlike Majestic or Indiranagar). entranceCount is therefore left unset (renderer default applies) rather than invented.",
+    "Renderer limitation, disclosed rather than hidden: the real crossing two-level interchange is suggested via a second, perpendicular viaduct deck above the main one (structural cue only, no second platform modelled) — the shared layout engine only builds one platform level.",
+    "No image files were downloaded, scraped, or embedded — this dataset stores link-only pointers to publicly viewable pages, gathered by reading their text content."
+  ],
+  "referenceConfidence": "medium"
+}

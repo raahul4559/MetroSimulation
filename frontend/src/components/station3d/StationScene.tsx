@@ -15,7 +15,9 @@ import { atmosphereFor } from "@/lib/station3d/atmosphere";
 import { getStationConfig } from "@/config/stations/stationConfigs";
 import { StationModel } from "./StationModel";
 import { CameraController } from "./CameraController";
+import { ReferencePanel } from "./ReferencePanel";
 import { useStationAsset } from "@/hooks/useStationAsset";
+import { useStationReferences } from "@/hooks/useStationReferences";
 import { useStationAnnouncements } from "@/hooks/useStationAnnouncements";
 import { useAudioSettings } from "@/hooks/useAudioSettings";
 import { audioManager } from "@/lib/audio/AudioManager";
@@ -72,7 +74,9 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
   const [selectedTrainId, setSelectedTrainId] = useState<number | null>(null);
   const [caption, setCaption] = useState<AnnouncementCaption | null>(null);
   const [audioPanelOpen, setAudioPanelOpen] = useState(false);
+  const [referencePanelOpen, setReferencePanelOpen] = useState(false);
   const [audioSettings, updateAudioSettings] = useAudioSettings();
+  const references = useStationReferences(config.id);
 
   const { latest: latestAnnouncement, consume: consumeAnnouncement } = useStationAnnouncements(
     layout,
@@ -126,6 +130,7 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
       setCameraMode("OVERVIEW");
       setSelectedTrainId(null);
       setResetToken((t) => t + 1);
+      setReferencePanelOpen(false);
     });
   }, [station.id]);
 
@@ -214,6 +219,23 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
         </div>
 
         <div className="pointer-events-auto flex items-start gap-2">
+          {references.status === "ready" && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setReferencePanelOpen((open) => !open)}
+                className="rounded-md border border-slate-700 bg-slate-900/90 px-3 py-2 text-sm text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800"
+                aria-label="Reference sources"
+              >
+                📎
+              </button>
+              {referencePanelOpen && (
+                <div className="absolute right-0 top-full mt-2">
+                  <ReferencePanel reference={references.data} onClose={() => setReferencePanelOpen(false)} />
+                </div>
+              )}
+            </div>
+          )}
           <div className="relative">
             <button
               type="button"

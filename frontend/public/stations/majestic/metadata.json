@@ -13,5 +13,5 @@
     "environment": "environment.glb",
     "textures": "textures/"
   },
-  "referenceNotes": "The network's central underground interchange between the Purple and Green Lines, adjacent to the City Railway Station and KSR bus stand. Represents the UNDERGROUND + INTERCHANGE + complex-station case. Classification is well-documented public knowledge; exact concourse/platform geometry is an illustrative approximation, not as-built drawings."
+  "referenceNotes": "The network's central underground interchange between the Purple and Green Lines, ~24m deep (cut-and-cover), adjacent to Kempegowda Bus Station and KSR Railway Station. Represents the UNDERGROUND + INTERCHANGE + complex-station case. Classification is well-documented public knowledge; exact concourse/platform geometry is an illustrative approximation, not as-built drawings. See references.json for sources and referenceConfidence."
 }

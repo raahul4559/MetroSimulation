@@ -13,5 +13,5 @@
     "environment": "environment.glb",
     "textures": "textures/"
   },
-  "referenceNotes": "Elevated interchange between the Green Line and the fully-elevated Yellow Line. Represents the ELEVATED + INTERCHANGE case. High-confidence classification; concourse/transfer geometry is an approximation."
+  "referenceNotes": "Elevated interchange between the Green Line (opened 2017) and the Yellow Line (opened 2025) on Rashtriya Vidyalaya Road — the two lines' viaducts cross perpendicular to each other, with 4 platforms across 2 levels. Represents the ELEVATED + INTERCHANGE case. Structural facts are well-documented; entrance/material detail is sparse in public sources, so is left conservative. See references.json for sources and referenceConfidence."
 }

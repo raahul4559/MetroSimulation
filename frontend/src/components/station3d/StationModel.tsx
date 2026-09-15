@@ -69,11 +69,13 @@ export function StationModel({
       <hemisphereLight args={[atmosphere.hemisphereSky, atmosphere.hemisphereGround, atmosphere.hemisphereIntensity]} />
 
       {asset.modelAvailable ? (
-        <Suspense fallback={<StationEnvironment buildType={buildType} minX={minX} maxX={maxX} />}>
+        <Suspense
+          fallback={<StationEnvironment buildType={buildType} minX={minX} maxX={maxX} architecture={asset.config.architecture} />}
+        >
           <StationAssetModel modelPath={asset.config.modelPath} />
         </Suspense>
       ) : (
-        <StationEnvironment buildType={buildType} minX={minX} maxX={maxX} />
+        <StationEnvironment buildType={buildType} minX={minX} maxX={maxX} architecture={asset.config.architecture} />
       )}
 
       {layout.platforms.map((platform) => (

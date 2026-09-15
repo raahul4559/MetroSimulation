@@ -22,6 +22,43 @@ export type StationModelQuality = "HIGH" | "RECONSTRUCTED" | "PROCEDURAL";
  * track pair — reserved for a future station whose real layout actually needs it. */
 export type PlatformArrangement = "ISLAND" | "SIDE";
 
+/** What kind of real landmark a station's immediate surroundings should read as, driving which
+ * context shape `ElevatedEnvironment`/`AtGradeEnvironment` add alongside the generic street
+ * buildings — e.g. a park edge instead of a building on one side. `"NONE"` (the default when
+ * unset) renders no landmark shape at all rather than guessing one. */
+export type LandmarkType = "PARK" | "TRANSIT_HUB" | "INSTITUTION" | "NONE";
+
+export interface StationLandmark {
+  readonly type: LandmarkType;
+  /** Short human label surfaced in the reference/dev panel, e.g. "Cubbon Park frontage" — never
+   * rendered as in-scene text, since it names a real place the geometry only approximates. */
+  readonly label: string;
+}
+
+/** Architecture facts distinct enough, per real references, to change this station's geometry
+ * beyond what `buildType`/`isInterchange`/`platformArrangement` already capture — every field
+ * optional because an uncurated (synthesized) station has none of these, and the renderer must
+ * fall back to the generic shell rather than require them. Each populated field here should trace
+ * back to a note in this station's `references.json` (see `StationVisualReference`) — this is
+ * where that research actually turns into geometry, not just documentation. */
+export interface ArchitecturalProfile {
+  /** Street-level stair/entrance structures to render (elevated/at-grade only). */
+  readonly entranceCount?: number;
+  /** Platform depth below street level, for an underground station — only known for a handful of
+   * stations; deepens/widens the tunnel shell when present rather than affecting scale for every
+   * station uniformly. */
+  readonly depthMeters?: number;
+  /** Whether this underground station has a documented concourse level above the platform (true
+   * multi-level interchanges like Majestic) — renders a mezzanine slab with a lit opening rather
+   * than modelling the second level's own geometry, which the shared layout engine doesn't yet
+   * support (see `references.json`'s notes for that disclosed limitation). */
+  readonly hasMezzanine?: boolean;
+  readonly landmark?: StationLandmark;
+  /** A dominant real-world material/signage tone from the references, used to tint fascia/light
+   * strips instead of the generic per-build-type default. */
+  readonly accentColorHex?: string;
+}
+
 export interface StationConfig {
   /** URL/asset-folder slug, e.g. "majestic" — derived from `stationCode` when not curated. */
   readonly id: string;
@@ -44,6 +81,10 @@ export interface StationConfig {
    * fly for a station the dataset has never seen (see `getStationConfig`) — the dashboard's
    * "reconstructed vs procedural" split is this flag, not a separate lookup. */
   readonly synthesized: boolean;
+  /** Present only for a station whose real references were analyzed deeply enough to justify
+   * station-specific geometry beyond its build type — absent (not zeroed-out) for every other
+   * station, so the renderer's fallback path stays the generic shell. */
+  readonly architecture?: ArchitecturalProfile | undefined;
 }
 
 /** A station's config plus what actually exists on disk right now, resolved once per station

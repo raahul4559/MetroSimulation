@@ -13,5 +13,5 @@
     "environment": "environment.glb",
     "textures": "textures/"
   },
-  "referenceNotes": "Elevated Purple Line station on 100 Feet Road. Represents the single-line ELEVATED case (viaduct, columns, street-level context). High-confidence classification; detailing is an approximation."
+  "referenceNotes": "Elevated Purple Line station on CMH Road / 100 Feet Road. Represents the single-line ELEVATED case (viaduct, columns, street-level context, 3 entrances). High-confidence classification; detailing is an approximation. See references.json for sources and referenceConfidence."
 }

@@ -4,7 +4,7 @@
   "name": "MG Road",
   "city": "Bengaluru",
   "lines": ["PURPLE"],
-  "buildType": "UNDERGROUND",
+  "buildType": "ELEVATED",
   "isInterchange": false,
   "platformArrangement": "ISLAND",
   "modelQualityIntent": "RECONSTRUCTED",
@@ -13,5 +13,5 @@
     "environment": "environment.glb",
     "textures": "textures/"
   },
-  "referenceNotes": "Underground Purple Line station beneath MG Road, adjacent to Cubbon Park. Represents the single-line UNDERGROUND case. High-confidence classification; detailing is an approximation."
+  "referenceNotes": "Elevated Purple Line station (real side platforms; renderer approximates as island) beside Cubbon Park, opened 2011. Corrected from an earlier UNDERGROUND entry that didn't match the built station. A genuinely underground Pink Line platform pair is under construction beneath it (targeted ~Dec 2026) but doesn't exist yet, so isn't modelled. See references.json for sources."
 }

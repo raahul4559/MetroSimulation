@@ -1,5 +1,5 @@
 import type { Line, Station } from "@/domain/metro";
-import type { StationBuildType, StationConfig } from "@/domain/stationConfig";
+import type { ArchitecturalProfile, StationBuildType, StationConfig } from "@/domain/stationConfig";
 
 /**
  * The central station configuration the whole spec asks for: one entry per operational station,
@@ -42,18 +42,22 @@ const CURATED_STATION_CONFIGS: Readonly<Record<string, StationConfig>> = buildCu
     buildType: "UNDERGROUND",
     isInterchange: true,
     notes:
-      "Nadaprabhu Kempegowda (Majestic) — the network's central underground interchange between the Purple and Green Lines, next to the City Railway Station and KSR bus stand. Well-documented as underground; exact concourse geometry here is an illustrative approximation, not survey-accurate.",
+      "Nadaprabhu Kempegowda (Majestic) — the network's central underground interchange between the Purple and Green Lines, next to the City Railway Station and Kempegowda Bus Station (KBS). Real station sits ~24m (80ft) deep, cut-and-cover, with the two lines on separate platform levels linked by a rake interchange — the shared layout engine only supports side-by-side platform modules, so the second level is suggested here via a mezzanine slab rather than modelled directly. See references.json.",
+    architecture: { depthMeters: 24, hasMezzanine: true, accentColorHex: "#3a4152" },
   },
   {
     code: "MG_ROAD",
-    buildType: "UNDERGROUND",
+    buildType: "ELEVATED",
     notes:
-      "Underground Purple Line station beneath MG Road, adjacent to Cubbon Park — high-confidence classification, approximate detailing.",
+      "Elevated Purple Line station (side platforms) on MG Road beside Cubbon Park, opened 2011 — corrected from an earlier UNDERGROUND entry that didn't match the real structure. A second, genuinely underground Pink Line platform pair is under construction beneath it (targeted ~Dec 2026) but doesn't exist yet, so isn't modelled. See references.json.",
+    architecture: { entranceCount: 2, landmark: { type: "PARK", label: "Cubbon Park frontage" }, accentColorHex: "#7c8a92" },
   },
   {
     code: "INDIRANAGAR",
     buildType: "ELEVATED",
-    notes: "Elevated Purple Line station on 100 Feet Road; high-confidence classification.",
+    notes:
+      "Elevated Purple Line station on CMH Road, one of the first six stations (opened 2011), with three real entry/exit points (A/B/C) toward Raghavendra Swamy Mutt and ESI Hospital — high-confidence classification. See references.json.",
+    architecture: { entranceCount: 3, landmark: { type: "INSTITUTION", label: "Raghavendra Swamy Mutt / ESI Hospital frontage" }, accentColorHex: "#8a7c66" },
   },
   {
     code: "BAIYAPPANAHALLI",
@@ -98,7 +102,8 @@ const CURATED_STATION_CONFIGS: Readonly<Record<string, StationConfig>> = buildCu
     buildType: "ELEVATED",
     isInterchange: true,
     notes:
-      "Elevated interchange between the Green Line and the (fully elevated) Yellow Line — high-confidence classification, approximate concourse/transfer geometry.",
+      "Elevated interchange between the Green Line (opened 2017) and the Yellow Line (opened 2025) on Rashtriya Vidyalaya Road — four platforms across two elevated levels, structurally well-documented, but public sources found so far say little about entrance count or material/colour detail, so those are left conservative rather than invented. See references.json.",
+    architecture: { hasMezzanine: true, landmark: { type: "TRANSIT_HUB", label: "RV Road / Basavanagudi junction" } },
   },
   {
     code: "YELACHENAHALLI",
@@ -142,7 +147,13 @@ const CURATED_STATION_CONFIGS: Readonly<Record<string, StationConfig>> = buildCu
 export type { StationBuildType };
 
 function buildCuratedConfigs(
-  entries: readonly { code: string; buildType: StationBuildType; isInterchange?: boolean; notes: string }[]
+  entries: readonly {
+    code: string;
+    buildType: StationBuildType;
+    isInterchange?: boolean;
+    notes: string;
+    architecture?: ArchitecturalProfile | undefined;
+  }[]
 ): Record<string, StationConfig> {
   const map: Record<string, StationConfig> = {};
   for (const entry of entries) {
@@ -159,6 +170,7 @@ function buildCuratedConfigs(
       texturesPath: `/stations/${id}/textures/`,
       referenceNotes: entry.notes,
       synthesized: false,
+      architecture: entry.architecture,
     };
   }
   return map;
