@@ -8,7 +8,6 @@ import type { StationConfig, StationModelQuality } from "@/domain/stationConfig"
 import type { StationVisualReference } from "@/domain/stationVisualReference";
 import type { AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
 import { cn } from "@/lib/ui/cn";
-import { simulatedTimeOfDay } from "@/lib/metro/clockDisplay";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
@@ -95,7 +94,7 @@ export function Station3DOverlay({
         hidden && "opacity-0",
       )}
       aria-hidden={hidden}
-      {...(hidden ? { inert: "" } : {})}
+      inert={hidden}
     >
       {/* Identity + exit */}
       <div className="absolute left-3 top-3 flex max-w-[min(22rem,60vw)] flex-col gap-2 sm:left-4 sm:top-4">

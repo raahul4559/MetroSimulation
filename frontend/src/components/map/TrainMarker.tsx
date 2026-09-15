@@ -1,5 +1,7 @@
 import type { TrainState } from "@/domain/trainsim";
 import type { Point } from "@/lib/geometry/projection";
+import { SURFACE_HEX, TONE_HEX } from "@/lib/ui/tone";
+import { vividize } from "@/lib/ui/lineColor";
 
 interface TrainMarkerProps {
   train: TrainState;
@@ -7,17 +9,30 @@ interface TrainMarkerProps {
   scale: number;
   colorHex: string;
   selected: boolean;
+  dimmed?: boolean;
   onSelect: (train: TrainState) => void;
 }
 
 const HELD_STATUSES = new Set(["STOPPED", "DELAYED"]);
 
 /**
- * A train's position on the map — a diamond (distinct from a station's circle) in its line's
- * color, counter-scaled like `StationMarker` so it stays a constant on-screen size at any zoom. A
- * red ring flags a train currently held for headway or past the delay threshold.
+ * A train's position on the map.
+ *
+ * A small rounded chip elongated along the direction of travel — deliberately a different shape
+ * language from a station's circle and a signal's square, so the three are distinguishable at a
+ * glance without relying on colour. Counter-scaled like `StationMarker` so it stays a constant
+ * on-screen size at any zoom. An amber ring flags a train currently held for headway or past the
+ * delay threshold.
  */
-export function TrainMarker({ train, point, scale, colorHex, selected, onSelect }: TrainMarkerProps) {
+export function TrainMarker({
+  train,
+  point,
+  scale,
+  colorHex,
+  selected,
+  dimmed = false,
+  onSelect,
+}: TrainMarkerProps) {
   const isHeld = HELD_STATUSES.has(train.status);
 
   return (
@@ -26,7 +41,8 @@ export function TrainMarker({ train, point, scale, colorHex, selected, onSelect 
       role="button"
       tabIndex={0}
       aria-label={`Train ${train.code}`}
-      className="cursor-pointer outline-none"
+      className="cursor-pointer outline-none transition-opacity duration-(--duration-base)"
+      opacity={dimmed ? 0.35 : 1}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -39,16 +55,21 @@ export function TrainMarker({ train, point, scale, colorHex, selected, onSelect 
         }
       }}
     >
-      {selected && <circle r={9} fill="none" stroke="#38bdf8" strokeWidth={2} />}
+      {selected && (
+        <>
+          <circle r={11} fill={TONE_HEX.info} opacity={0.18} />
+          <circle r={8} fill="none" stroke={TONE_HEX.info} strokeWidth={1.75} />
+        </>
+      )}
       <rect
-        x={-4.5}
-        y={-4.5}
-        width={9}
-        height={9}
-        transform="rotate(45)"
-        fill={colorHex}
-        stroke={isHeld ? "#f87171" : "#f1f5f9"}
-        strokeWidth={isHeld ? 2 : 1.2}
+        x={-5}
+        y={-3.25}
+        width={10}
+        height={6.5}
+        rx={3.25}
+        fill={vividize(colorHex)}
+        stroke={isHeld ? TONE_HEX.warning : SURFACE_HEX.canvas}
+        strokeWidth={isHeld ? 1.75 : 1.25}
       />
     </g>
   );

@@ -19,6 +19,8 @@ export interface MapCameraMove {
 export interface StationImmersionController {
   readonly immersion: StationImmersion;
   readonly cameraMove: MapCameraMove | undefined;
+  /** Whether the 3D scene has reported itself painted for the current entry. Drives the load bar. */
+  readonly sceneReady: boolean;
   /** Begin entering a station. `from` is the framing on screen at the moment of the request. */
   readonly enter: (station: Station, from: ViewTransform, enterTransform: ViewTransform) => void;
   readonly exit: () => void;
@@ -144,5 +146,5 @@ export function useStationImmersion(reducedMotion: boolean): StationImmersionCon
     return undefined;
   }, [immersion.phase, duration, issueCameraMove]);
 
-  return { immersion, cameraMove, enter, exit, onCameraMoveComplete, onSceneReady };
+  return { immersion, cameraMove, sceneReady, enter, exit, onCameraMoveComplete, onSceneReady };
 }

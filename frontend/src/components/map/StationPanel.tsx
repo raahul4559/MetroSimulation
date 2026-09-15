@@ -1,30 +1,34 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { Box } from "lucide-react";
 import type { Line, Station, Track } from "@/domain/metro";
 import type { Passenger, TrainState } from "@/domain/trainsim";
-import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
-import { buildStationIndex, getLinesForStation, getNeighborStations } from "@/lib/metro/selectors";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { OccupancyBar } from "@/components/ui/OccupancyBar";
+import { getLinesForStation } from "@/lib/metro/selectors";
 import {
   DENSITY_LABEL,
   DENSITY_TONE,
   densityLevel,
   getStationQueue,
 } from "@/lib/metro/passengerDisplay";
+import { formatEta, getStationArrivals } from "@/lib/metro/stationArrivals";
+import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
+import { lineVividColor } from "@/lib/ui/lineColor";
+import { cn } from "@/lib/ui/cn";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { LineBadge } from "@/components/ui/LineBadge";
+import { Metric } from "@/components/ui/Metric";
+import { StatusIndicator } from "@/components/ui/StatusIndicator";
 
 interface StationPanelProps {
   station: Station;
   lines: readonly Line[];
-  stations: readonly Station[];
   tracks: readonly Track[];
   trains: readonly TrainState[];
   passengers: readonly Passenger[];
-  liveFeedStatus: ConnectionStatus;
   onClose: () => void;
   onEnter3D?: ((station: Station) => void) | undefined;
 }
-
-const AT_STATION_STATUSES = new Set(["AT_STATION", "DWELLING"]);
 
 const TYPE_LABEL: Record<Station["stationType"], string> = {
   REGULAR: "Regular station",
@@ -33,160 +37,159 @@ const TYPE_LABEL: Record<Station["stationType"], string> = {
 };
 
 /**
- * Station information panel, opened by clicking a station on the map. Reads only from props —
- * all derivation (lines, neighbors) comes from `lib/metro/selectors`, not computed here.
+ * The contextual panel for a selected station.
+ *
+ * Ordered the way an operator reads it: what this station is, whether it is working, what is
+ * arriving next, then the numbers, then the way in. The previous version led with five equally
+ * weighted sections (lines, nearby stations, current trains, queue, data feed) which meant the
+ * single most time-sensitive fact — the next train — was three sections down.
+ *
+ * Reads only from props; arrivals and platform numbers are derived in `lib/metro/stationArrivals`,
+ * not computed here.
  */
 export function StationPanel({
   station,
   lines,
-  stations,
   tracks,
   trains,
   passengers,
-  liveFeedStatus,
   onClose,
   onEnter3D,
 }: StationPanelProps) {
   const stationLines = getLinesForStation(station, lines);
-  const neighbors = getNeighborStations(station, tracks, buildStationIndex(stations));
-  const lineByCode = new Map(lines.map((line) => [line.code, line]));
-
-  const trainsHere = trains.filter(
-    (t) => t.previousStationId === station.id && AT_STATION_STATUSES.has(t.status)
-  );
+  const arrivals = getStationArrivals(station, trains, tracks, lines);
   const queue = getStationQueue(passengers, station.id);
   const density = densityLevel(queue.length);
 
+  const next = arrivals[0];
+  const upcoming = arrivals.slice(1, 4);
+  const avgDelay =
+    arrivals.length > 0
+      ? Math.round(arrivals.reduce((sum, a) => sum + a.train.delaySeconds, 0) / arrivals.length)
+      : 0;
+
   return (
-    <div className="pointer-events-auto absolute inset-x-2 bottom-2 top-auto max-h-[65%] w-auto overflow-y-auto rounded-lg border border-slate-700 bg-slate-900/95 p-4 shadow-xl backdrop-blur md:inset-auto md:top-16 md:right-3 md:bottom-3 md:w-80 md:max-h-none">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-base font-semibold text-slate-50">{station.name}</h3>
-          <p className="text-xs text-slate-500">{station.code}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close station panel"
-          className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        <StatusBadge
-          label={TYPE_LABEL[station.stationType]}
-          tone={station.stationType === "INTERCHANGE" ? "warning" : "neutral"}
-        />
-        <StatusBadge label="Operational" tone="positive" />
-      </div>
-
-      {onEnter3D && (
-        <button
-          type="button"
-          onClick={() => onEnter3D(station)}
-          className="mb-4 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
-        >
-          View in 3D
-        </button>
-      )}
-
-      <Section title="Lines">
-        <div className="flex flex-wrap gap-1.5">
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={station.name}
+      subtitle={
+        <span className="flex flex-wrap items-center gap-1.5">
           {stationLines.map((line) => (
-            <span
-              key={line.id}
-              className="flex items-center gap-1.5 rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-200"
-            >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: line.colorHex }}
-                aria-hidden
-              />
-              {line.name}
-            </span>
+            <LineBadge key={line.id} line={line} />
           ))}
-        </div>
+        </span>
+      }
+      footer={
+        onEnter3D && (
+          <Button fullWidth icon={<Box size={15} />} onClick={() => onEnter3D(station)}>
+            Enter 3D Station
+          </Button>
+        )
+      }
+    >
+      <div className="flex items-center justify-between gap-2 pb-4">
+        <StatusIndicator label="Operational" tone="positive" size="md" />
+        <span className="text-[11px] text-muted">
+          {TYPE_LABEL[station.stationType]} · {station.code}
+        </span>
+      </div>
+
+      <Section title="Next train">
+        {next ? (
+          <div>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="min-w-0 truncate text-sm text-content">
+                <span style={{ color: lineVividColor(next.line) }}>
+                  {next.line?.name ?? next.train.lineCode}
+                </span>
+                <span className="text-muted"> → </span>
+                {next.destinationName}
+              </p>
+              <p className="tabular shrink-0 font-mono text-lg font-semibold text-content">
+                {formatEta(next.etaSeconds)}
+              </p>
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              {next.platformNumber != null && `Platform ${next.platformNumber} · `}
+              {next.atPlatform ? "At platform" : "Arriving"}
+              {next.train.delaySeconds > 0 && (
+                <span className="text-warning">
+                  {" "}
+                  · +{formatDurationSeconds(next.train.delaySeconds)}
+                </span>
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted">No trains currently approaching.</p>
+        )}
       </Section>
 
-      <Section title="Nearby stations">
-        {neighbors.length === 0 ? (
-          <p className="text-xs text-slate-500">No connected stations.</p>
-        ) : (
+      {upcoming.length > 0 && (
+        <Section title="Then">
           <ul className="space-y-1.5">
-            {neighbors.map((neighbor) => (
+            {upcoming.map((arrival) => (
               <li
-                key={`${neighbor.station.id}-${neighbor.lineCode}`}
-                className="flex items-center justify-between text-xs text-slate-300"
+                key={arrival.train.id}
+                className="flex items-baseline justify-between gap-3 text-xs"
               >
-                <span>{neighbor.station.name}</span>
-                <span className="text-slate-500">
-                  {(neighbor.distanceMetres / 1000).toFixed(1)} km ·{" "}
-                  {Math.round(neighbor.travelTimeSeconds / 60)} min
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <LineBadge line={arrival.line ?? null} variant="dot" />
+                  <span className="truncate text-secondary">{arrival.destinationName}</span>
+                </span>
+                <span className="tabular shrink-0 font-mono text-muted">
+                  {formatEta(arrival.etaSeconds)}
                 </span>
               </li>
             ))}
           </ul>
-        )}
-      </Section>
+        </Section>
+      )}
 
-      <Section title="Current trains">
-        {trainsHere.length === 0 ? (
-          <p className="text-xs text-slate-500">No trains currently at this station.</p>
-        ) : (
-          <ul className="space-y-2">
-            {trainsHere.map((train) => (
-              <li key={train.id} className="text-xs">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: lineByCode.get(train.lineCode)?.colorHex ?? "#94a3b8" }}
-                      aria-hidden
-                    />
-                    <span className="font-mono font-medium text-slate-100">{train.code}</span>
-                  </span>
-                  <span className="text-slate-500">{train.status === "DWELLING" ? "Boarding" : "At platform"}</span>
-                </div>
-                <OccupancyBar count={train.passengerCount} capacity={train.capacity} compact />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section title="Passenger queue">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs text-slate-300">{queue.length} waiting</span>
-          <StatusBadge label={DENSITY_LABEL[density]} tone={DENSITY_TONE[density]} />
+      <Section title="Right now">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+          <Metric label="Platforms" value={stationLines.length} size="sm" />
+          <Metric label="Incoming" value={arrivals.length} size="sm" />
+          <Metric
+            label="Passengers"
+            value={queue.length}
+            size="sm"
+            tone={DENSITY_TONE[density]}
+            sublabel={`${DENSITY_LABEL[density]} density`}
+          />
+          <Metric
+            label="Avg delay"
+            value={avgDelay > 0 ? `+${formatDurationSeconds(avgDelay)}` : "On time"}
+            size="sm"
+            tone={avgDelay > 0 ? "warning" : "neutral"}
+          />
         </div>
-        {queue.length > 0 && (
-          <p className="text-xs text-slate-500">
-            {queue.filter((p) => p.status === "TRANSFER").length} transferring ·{" "}
-            {queue.filter((p) => p.status === "WAITING").length} first boarding
-          </p>
-        )}
       </Section>
 
-      <Section title="Data feed" last>
-        <p className="text-xs text-slate-400">
-          {liveFeedStatus === "connected"
-            ? "Connected — receiving live simulation updates."
-            : liveFeedStatus === "connecting"
-              ? "Connecting to the simulation feed…"
-              : "Disconnected from the simulation feed."}
+      {queue.length > 0 && (
+        <p className="tabular text-[11px] text-muted">
+          {queue.filter((p) => p.status === "TRANSFER").length} transferring ·{" "}
+          {queue.filter((p) => p.status === "WAITING").length} first boarding
         </p>
-      </Section>
-    </div>
+      )}
+    </BottomSheet>
   );
 }
 
-function Section({ title, children, last = false }: { title: string; children: ReactNode; last?: boolean }) {
+function Section({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={last ? "" : "mb-4"}>
-      <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
+    <section className={cn("border-t border-divider py-4 first-of-type:border-t-0", className)}>
+      <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted">{title}</h3>
       {children}
-    </div>
+    </section>
   );
 }

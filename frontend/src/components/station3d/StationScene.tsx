@@ -5,22 +5,20 @@ import { Canvas } from "@react-three/fiber";
 import type { Line, Station } from "@/domain/metro";
 import type { Disruption, Passenger, SimulationClock, TrainState } from "@/domain/trainsim";
 import type { CameraMode3D } from "@/domain/station3d";
-import type { StationModelQuality } from "@/domain/stationConfig";
-import { LANGUAGE_LABELS, LANGUAGE_MODE_PRESETS, type LanguageMode } from "@/domain/announcement";
 import { buildStationLayout3D } from "@/lib/station3d/layout";
 import { findUpcomingTrainCode, selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
-import { formatDurationSeconds, formatOccupancyPercent } from "@/lib/metro/passengerDisplay";
 import { buildPlatformDestinations } from "@/lib/station3d/interchangeSignage";
 import { atmosphereFor } from "@/lib/station3d/atmosphere";
 import { getStationConfig } from "@/config/stations/stationConfigs";
 import { StationModel } from "./StationModel";
 import { CameraController } from "./CameraController";
 import { AudioListenerSync } from "./AudioListenerSync";
-import { ReferencePanel } from "./ReferencePanel";
+import { SceneReadySignal } from "./SceneReadySignal";
+import { Station3DOverlay } from "./Station3DOverlay";
+import { simulatedTimeOfDay } from "@/lib/metro/clockDisplay";
 import { useStationAsset } from "@/hooks/useStationAsset";
 import { useStationReferences } from "@/hooks/useStationReferences";
 import { useStationAnnouncements } from "@/hooks/useStationAnnouncements";
-import { useAudioSettings } from "@/hooks/useAudioSettings";
 import { audioManager } from "@/lib/audio/AudioManager";
 import { announcementService, type AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
 
@@ -33,14 +31,16 @@ interface StationSceneProps {
   disruptions?: readonly Disruption[];
   clock: SimulationClock;
   onBack: () => void;
+  /**
+   * Fired once the canvas has actually drawn its first frames for this station — the signal a
+   * transition owner needs before revealing the scene. Absent when the scene is mounted directly,
+   * with no transition around it.
+   */
+  onReady?: (() => void) | undefined;
+  /** Hides this scene's own HTML chrome while a transition overlay is covering it, so the station
+   * name doesn't appear twice during the hand-off. */
+  chromeHidden?: boolean | undefined;
 }
-
-const CAMERA_MODES: readonly { mode: CameraMode3D; label: string }[] = [
-  { mode: "OVERVIEW", label: "Station Overview" },
-  { mode: "PASSENGER", label: "Passenger View" },
-  { mode: "FOLLOW", label: "Follow Train" },
-  { mode: "FREE", label: "Free Camera" },
-];
 
 /**
  * The 3D station view's top-level component: builds the station's procedural layout and resolves
@@ -54,7 +54,18 @@ const CAMERA_MODES: readonly { mode: CameraMode3D; label: string }[] = [
  * ever hands a real `AnnouncementEvent` to `AnnouncementService` — it never builds announcement text
  * or picks a voice itself, that logic lives entirely outside the 3D scene.
  */
-export function StationScene({ station, lines, stations, trains, passengers, disruptions = [], clock, onBack }: StationSceneProps) {
+export function StationScene({
+  station,
+  lines,
+  stations,
+  trains,
+  passengers,
+  disruptions = [],
+  clock,
+  onBack,
+  onReady,
+  chromeHidden = false,
+}: StationSceneProps) {
   const stationsById = useMemo(() => new Map(stations.map((s) => [s.id, s] as const)), [stations]);
   const lineByCode = useMemo(() => new Map(lines.map((l) => [l.code, l] as const)), [lines]);
   const layout = useMemo(() => buildStationLayout3D(station, lines, stationsById), [station, lines, stationsById]);
@@ -74,9 +85,6 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
   const [resetToken, setResetToken] = useState(0);
   const [selectedTrainId, setSelectedTrainId] = useState<number | null>(null);
   const [caption, setCaption] = useState<AnnouncementCaption | null>(null);
-  const [audioPanelOpen, setAudioPanelOpen] = useState(false);
-  const [referencePanelOpen, setReferencePanelOpen] = useState(false);
-  const [audioSettings, updateAudioSettings] = useAudioSettings();
   const references = useStationReferences(config.id);
 
   const { latest: latestAnnouncement, consume: consumeAnnouncement } = useStationAnnouncements(
@@ -138,7 +146,6 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
       setCameraMode("OVERVIEW");
       setSelectedTrainId(null);
       setResetToken((t) => t + 1);
-      setReferencePanelOpen(false);
     });
   }, [station.id]);
 
@@ -163,7 +170,10 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
       : 0;
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-md bg-slate-950" onPointerDown={() => audioManager.ensureContext()}>
+    <div
+      className="relative h-full w-full overflow-hidden bg-canvas"
+      onPointerDown={() => audioManager.ensureContext()}
+    >
       <Canvas shadows camera={{ fov: 50, near: 0.1, far: 600 }} dpr={[1, 1.75]}>
         <Suspense fallback={null}>
           <color attach="background" args={[atmosphere.background]} />
@@ -185,224 +195,36 @@ export function StationScene({ station, lines, stations, trains, passengers, dis
             resetToken={resetToken}
           />
           <AudioListenerSync />
+          {onReady && <SceneReadySignal onReady={onReady} />}
         </Suspense>
       </Canvas>
 
-      <span className="pointer-events-none absolute left-3 top-3 rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-wide text-slate-500">
-        {config.buildType}
-        {config.isInterchange ? " · INTERCHANGE" : ""} · {qualityLabel(asset.quality)}
-      </span>
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
-        <div className="pointer-events-auto rounded-lg border border-slate-700 bg-slate-900/90 px-4 py-3 shadow-xl backdrop-blur">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-lg font-semibold text-slate-50">{station.name}</h2>
-            <span className="font-mono text-[11px] text-slate-500">{formatClockTime(clock.currentTime)}</span>
-          </div>
-          {selectedPlatform && (
-            <p className="text-xs text-slate-400">
-              Platform {selectedPlatform.platformNumber} · <span style={{ color: selectedPlatform.colorHex }}>{selectedPlatform.lineName}</span>
-            </p>
-          )}
-          {selectedTrain ? (
-            <div className="mt-2 space-y-0.5 text-xs text-slate-300">
-              <p>
-                Train: <span className="font-mono text-slate-100">{selectedTrain.code}</span>
-              </p>
-              <p>Destination: {selectedTrain.destinationStationName || "—"}</p>
-              <p>Next station: {selectedTrain.nextStationName || "Terminus"}</p>
-              <p>Occupancy: {formatOccupancyPercent(selectedTrain.passengerCount, selectedTrain.capacity)}</p>
-              <p className={selectedTrain.delaySeconds > 0 ? "text-amber-400" : "text-emerald-400"}>
-                Delay: {selectedTrain.delaySeconds > 0 ? `+${formatDurationSeconds(selectedTrain.delaySeconds)}` : "On time"}
-              </p>
-              {nextTrainCode && <p className="text-slate-500">Next train: {nextTrainCode}</p>}
-              {selectedTrain.phase === "BOARDING" && (
-                <p className="text-slate-400">
-                  Doors open — {boardingCount} boarding · {alightingCount} alighting
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="mt-2 text-xs text-slate-500">No train currently at this station.</p>
-          )}
-        </div>
-
-        <div className="pointer-events-auto flex items-start gap-2">
-          {references.status === "ready" && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setReferencePanelOpen((open) => !open)}
-                className="rounded-md border border-slate-700 bg-slate-900/90 px-3 py-2 text-sm text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800"
-                aria-label="Reference sources"
-              >
-                📎
-              </button>
-              {referencePanelOpen && (
-                <div className="absolute right-0 top-full mt-2">
-                  <ReferencePanel reference={references.data} onClose={() => setReferencePanelOpen(false)} />
-                </div>
-              )}
-            </div>
-          )}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setAudioPanelOpen((open) => !open)}
-              className="rounded-md border border-slate-700 bg-slate-900/90 px-3 py-2 text-sm text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800"
-              aria-label="Audio settings"
-            >
-              {audioSettings.muted ? "🔇" : "🔊"}
-            </button>
-            {audioPanelOpen && (
-              <div className="absolute right-0 top-full mt-2 w-48 space-y-2 rounded-md border border-slate-700 bg-slate-900/95 p-3 text-xs text-slate-200 shadow-xl backdrop-blur">
-                <label className="flex items-center justify-between gap-2">
-                  <span>Mute</span>
-                  <input
-                    type="checkbox"
-                    checked={audioSettings.muted}
-                    onChange={(e) => updateAudioSettings({ muted: e.target.checked })}
-                  />
-                </label>
-                <label className="flex items-center gap-2">
-                  <span className="w-14">Volume</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={audioSettings.volume}
-                    onChange={(e) => updateAudioSettings({ volume: Number(e.target.value) })}
-                    className="flex-1 accent-sky-400"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-2">
-                  <span>Announcements</span>
-                  <input
-                    type="checkbox"
-                    checked={audioSettings.announcementsEnabled}
-                    onChange={(e) => updateAudioSettings({ announcementsEnabled: e.target.checked })}
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-2">
-                  <span>Ambient audio</span>
-                  <input
-                    type="checkbox"
-                    checked={audioSettings.ambienceEnabled}
-                    onChange={(e) => updateAudioSettings({ ambienceEnabled: e.target.checked })}
-                  />
-                </label>
-                <label className="block space-y-1">
-                  <span>Announcement language</span>
-                  <select
-                    value={languageModePresetId(audioSettings.languageMode)}
-                    onChange={(e) => {
-                      const preset = LANGUAGE_MODE_PRESETS.find((p) => p.id === e.target.value);
-                      if (preset) updateAudioSettings({ languageMode: preset.languages });
-                    }}
-                    className="w-full rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-xs text-slate-100"
-                  >
-                    {LANGUAGE_MODE_PRESETS.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-md border border-slate-700 bg-slate-900/90 px-3 py-2 text-sm text-slate-200 shadow-xl backdrop-blur hover:bg-slate-800"
-          >
-            ← Network
-          </button>
-        </div>
-      </div>
-
-      {caption && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center px-4">
-          <div className="max-w-xl rounded-md bg-slate-900/85 px-3 py-1.5 text-center text-xs text-slate-100 shadow-lg backdrop-blur">
-            <span className="mr-1.5 rounded bg-slate-700/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-300">
-              {LANGUAGE_LABELS[caption.language]}
-            </span>
-            {caption.text}
-          </div>
-        </div>
-      )}
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4">
-        {trainVisuals.length > 1 && (
-          <div className="pointer-events-auto flex flex-wrap justify-center gap-1.5">
-            {trainVisuals.map((t) => (
-              <button
-                key={t.trainId}
-                type="button"
-                onClick={() => setSelectedTrainId(t.trainId)}
-                className={`rounded-full border px-2.5 py-1 text-xs font-mono transition-colors ${
-                  t.trainId === selectedTrainId
-                    ? "border-sky-400 bg-sky-500/20 text-sky-200"
-                    : "border-slate-700 bg-slate-900/80 text-slate-400 hover:text-slate-100"
-                }`}
-              >
-                {t.code}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-1.5 shadow-xl backdrop-blur">
-          {CAMERA_MODES.map(({ mode, label }) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setCameraMode(mode)}
-              className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                cameraMode === mode ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-          <span className="mx-1 h-5 w-px bg-slate-700" aria-hidden />
-          <button
-            type="button"
-            onClick={() => setResetToken((t) => t + 1)}
-            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800"
-          >
-            Reset Camera
-          </button>
-        </div>
-      </div>
+      <Station3DOverlay
+        station={station}
+        config={config}
+        quality={asset.quality}
+        platformLabel={
+          selectedPlatform
+            ? `Platform ${selectedPlatform.platformNumber} · ${selectedPlatform.lineName}`
+            : null
+        }
+        clockTime={simulatedTimeOfDay(clock.currentTime)}
+        cameraMode={cameraMode}
+        onCameraModeChange={setCameraMode}
+        onResetCamera={() => setResetToken((t) => t + 1)}
+        onBack={onBack}
+        caption={caption}
+        reference={references.status === "ready" ? references.data : null}
+        train={selectedTrain}
+        platform={selectedPlatform}
+        trains={trainVisuals}
+        selectedTrainId={selectedTrainId}
+        onSelectTrain={setSelectedTrainId}
+        nextTrainCode={nextTrainCode}
+        boardingCount={boardingCount}
+        alightingCount={alightingCount}
+        hidden={chromeHidden}
+      />
     </div>
   );
-}
-
-/** Which preset the operator's current `languageMode` matches, for the `<select>`'s value — settings
- * are only ever written from a preset (see the `onChange` above), so this always finds one in
- * practice; falls back to the first preset (English) if a stored value somehow doesn't match. */
-function languageModePresetId(languages: LanguageMode): string {
-  const key = languages.join(",");
-  const match = LANGUAGE_MODE_PRESETS.find((preset) => preset.languages.join(",") === key);
-  return match?.id ?? LANGUAGE_MODE_PRESETS[0]!.id;
-}
-
-function qualityLabel(quality: StationModelQuality): string {
-  switch (quality) {
-    case "HIGH":
-      return "High fidelity";
-    case "RECONSTRUCTED":
-      return "Simplified reconstruction";
-    case "PROCEDURAL":
-      return "Procedural fallback";
-  }
-}
-
-function formatClockTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }

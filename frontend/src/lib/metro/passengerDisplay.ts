@@ -1,6 +1,5 @@
+import { TONE_HEX, type Tone } from "@/lib/ui/tone";
 import type { Passenger, PassengerStatus } from "@/domain/trainsim";
-
-type Tone = "neutral" | "positive" | "warning" | "danger";
 
 export const PASSENGER_STATUS_LABEL: Record<PassengerStatus, string> = {
   WAITING: "Waiting",
@@ -73,11 +72,14 @@ export const DENSITY_TONE: Record<DensityLevel, Tone> = {
   crowded: "danger",
 };
 
+/** Resolved hex per density level, for SVG/three.js consumers that cannot use a Tailwind class.
+ * Derived from DENSITY_TONE rather than restated, so a density colour and the matching badge
+ * colour cannot drift — they used to be four hand-written hexes that did exactly that. */
 export const DENSITY_COLOR: Record<DensityLevel, string> = {
-  low: "#34d399",
-  moderate: "#94a3b8",
-  high: "#fbbf24",
-  crowded: "#f87171",
+  low: TONE_HEX[DENSITY_TONE.low],
+  moderate: TONE_HEX[DENSITY_TONE.moderate],
+  high: TONE_HEX[DENSITY_TONE.high],
+  crowded: TONE_HEX[DENSITY_TONE.crowded],
 };
 
 export function occupancyRatio(count: number, capacity: number): number {
