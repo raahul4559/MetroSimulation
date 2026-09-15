@@ -36,3 +36,37 @@ export function zoomTowards(
     ty: viewBoxPoint.y - nextScale * worldY,
   };
 }
+
+/**
+ * The transform that puts `point` dead-centre in the viewBox at `scale`.
+ *
+ * Extracted from `useMapViewport.focusOn` so a caller driving a transition can compute the exact
+ * framing the map will settle on without owning the map's viewport state — which is what lets the
+ * 2D→3D hand-off capture a return framing and restore it later.
+ */
+export function centerOn(
+  point: { x: number; y: number },
+  scale: number,
+  viewport: { width: number; height: number }
+): ViewTransform {
+  const nextScale = clampScale(scale);
+  return {
+    scale: nextScale,
+    tx: viewport.width / 2 - nextScale * point.x,
+    ty: viewport.height / 2 - nextScale * point.y,
+  };
+}
+
+/** Componentwise interpolation between two transforms. `easedT` is already eased, 0..1. */
+export function lerpTransform(from: ViewTransform, to: ViewTransform, easedT: number): ViewTransform {
+  return {
+    scale: from.scale + (to.scale - from.scale) * easedT,
+    tx: from.tx + (to.tx - from.tx) * easedT,
+    ty: from.ty + (to.ty - from.ty) * easedT,
+  };
+}
+
+/** Cubic ease-out, the map camera's motion curve. */
+export function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
