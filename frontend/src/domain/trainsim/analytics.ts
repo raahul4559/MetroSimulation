@@ -5,6 +5,10 @@
 
 export type AnalyticsRange = "CURRENT_HOUR" | "FULL" | "CUSTOM";
 
+/** Where a section's numbers came from. Declared once here so the badge, the chart cards and the
+ * dashboard all narrow against the same union instead of restating the three literals. */
+export type AnalyticsKind = "LIVE" | "SIMULATION_RESULT" | "HISTORICAL";
+
 export interface AnalyticsMeta {
   range: AnalyticsRange;
   fromSimTime: string;

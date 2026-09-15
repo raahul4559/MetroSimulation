@@ -1,7 +1,6 @@
 import type { Station } from "@/domain/metro";
 import type { TrainState, TrainStatus } from "@/domain/trainsim";
-
-type Tone = "neutral" | "positive" | "warning" | "danger";
+import type { Tone } from "@/lib/ui/tone";
 
 export const TRAIN_STATUS_TONE: Record<TrainStatus, Tone> = {
   SCHEDULED: "neutral",

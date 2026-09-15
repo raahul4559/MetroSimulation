@@ -1,8 +1,23 @@
+"use client";
+
 import { useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import type { Station } from "@/domain/metro";
-import type { CreateDisruptionRequest, DisruptionSeverity, DisruptionType, TrainState } from "@/domain/trainsim";
+import type {
+  CreateDisruptionRequest,
+  DisruptionSeverity,
+  DisruptionType,
+  TrainState,
+} from "@/domain/trainsim";
 import { resourceTypeFor } from "@/domain/trainsim";
-import { DISRUPTION_TYPE_LABEL } from "@/lib/metro/disruptionDisplay";
+import {
+  DISRUPTION_SEVERITY_LABEL,
+  DISRUPTION_TYPE_LABEL,
+} from "@/lib/metro/disruptionDisplay";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 interface DisruptionPanelProps {
   stations: readonly Station[];
@@ -61,83 +76,69 @@ export function DisruptionPanel({ stations, trains, onCreate, isBusy, error }: D
     }
   }
 
-  const selectClass =
-    "w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-100";
-  const labelClass = "block text-xs text-slate-400";
+  const stationOptions = stations.map((s) => (
+    <option key={s.id} value={s.id}>
+      {s.name}
+    </option>
+  ));
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && (
+        <p className="flex items-start gap-2 rounded-md bg-danger/10 px-2.5 py-2 text-[11px] text-danger ring-1 ring-inset ring-danger/25">
+          <TriangleAlert size={13} className="mt-px shrink-0" aria-hidden />
+          {error}
+        </p>
+      )}
 
-      <div>
-        <label className={labelClass}>Type</label>
-        <select className={selectClass} value={type} onChange={(e) => setType(e.target.value as DisruptionType)}>
+      <Field label="Type">
+        <Select value={type} onChange={(e) => setType(e.target.value as DisruptionType)}>
           {DISRUPTION_TYPES.map((t) => (
             <option key={t} value={t}>
               {DISRUPTION_TYPE_LABEL[t]}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
 
       {resourceType === "TRACK" && (
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className={labelClass}>From station</label>
-            <select
-              className={selectClass}
+          <Field label="From station">
+            <Select
               value={fromStationId}
               onChange={(e) => setFromStationId(e.target.value === "" ? "" : Number(e.target.value))}
             >
               <option value="">Select…</option>
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>To station</label>
-            <select
-              className={selectClass}
+              {stationOptions}
+            </Select>
+          </Field>
+          <Field label="To station">
+            <Select
               value={toStationId}
               onChange={(e) => setToStationId(e.target.value === "" ? "" : Number(e.target.value))}
             >
               <option value="">Select…</option>
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              {stationOptions}
+            </Select>
+          </Field>
         </div>
       )}
 
       {resourceType === "STATION" && (
-        <div>
-          <label className={labelClass}>Station</label>
-          <select
-            className={selectClass}
+        <Field label="Station">
+          <Select
             value={stationId}
             onChange={(e) => setStationId(e.target.value === "" ? "" : Number(e.target.value))}
           >
             <option value="">Select…</option>
-            {stations.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            {stationOptions}
+          </Select>
+        </Field>
       )}
 
       {resourceType === "TRAIN" && (
-        <div>
-          <label className={labelClass}>Train</label>
-          <select
-            className={selectClass}
+        <Field label="Train">
+          <Select
             value={trainId}
             onChange={(e) => setTrainId(e.target.value === "" ? "" : Number(e.target.value))}
           >
@@ -149,51 +150,52 @@ export function DisruptionPanel({ stations, trains, onCreate, isBusy, error }: D
                   {t.code}
                 </option>
               ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className={labelClass}>Duration (minutes)</label>
-          <input
+        <Field label="Duration" hint="minutes">
+          <Input
             type="number"
             min={1}
-            className={selectClass}
             value={durationMinutes}
             onChange={(e) => setDurationMinutes(Number(e.target.value))}
           />
-        </div>
-        <div>
-          <label className={labelClass}>Severity</label>
-          <select className={selectClass} value={severity} onChange={(e) => setSeverity(e.target.value as DisruptionSeverity)}>
+        </Field>
+        <Field label="Severity">
+          <Select
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value as DisruptionSeverity)}
+          >
             {SEVERITIES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {DISRUPTION_SEVERITY_LABEL[s]}
               </option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       </div>
 
-      <div>
-        <label className={labelClass}>Description (optional)</label>
-        <input
+      <Field label="Description" hint="Optional">
+        <Input
           type="text"
-          className={selectClass}
           placeholder={DISRUPTION_TYPE_LABEL[type]}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
-      </div>
+      </Field>
 
-      <button
+      <Button
         type="submit"
-        disabled={isBusy}
-        className="w-full rounded-md bg-red-900/70 px-3 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-900 disabled:opacity-50"
+        variant="danger"
+        size="sm"
+        fullWidth
+        loading={isBusy}
+        icon={<TriangleAlert size={13} />}
       >
         {isBusy ? "Creating…" : "Create disruption"}
-      </button>
+      </Button>
     </form>
   );
 }

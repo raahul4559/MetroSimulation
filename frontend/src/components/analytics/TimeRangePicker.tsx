@@ -1,4 +1,9 @@
+"use client";
+
 import type { AnalyticsRange } from "@/domain/trainsim/analytics";
+import { SegmentedControl, type SegmentOption } from "@/components/ui/SegmentedControl";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
 interface TimeRangePickerProps {
   range: AnalyticsRange;
@@ -9,12 +14,14 @@ interface TimeRangePickerProps {
   onCustomToChange: (value: string) => void;
 }
 
-const OPTIONS: { value: AnalyticsRange; label: string }[] = [
+const OPTIONS: readonly SegmentOption<AnalyticsRange>[] = [
   { value: "CURRENT_HOUR", label: "Current sim hour" },
   { value: "FULL", label: "Full simulation" },
   { value: "CUSTOM", label: "Custom range" },
 ];
 
+/** Fully controlled — it holds no state of its own, so the dashboard stays the single owner of
+ * what range is being analysed. */
 export function TimeRangePicker({
   range,
   onRangeChange,
@@ -24,40 +31,29 @@ export function TimeRangePicker({
   onCustomToChange,
 }: TimeRangePickerProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex overflow-hidden rounded-md border border-slate-800">
-        {OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => onRangeChange(opt.value)}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              range === opt.value ? "bg-blue-600 text-white" : "bg-slate-900 text-slate-400 hover:bg-slate-800"
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-wrap items-end gap-3">
+      <SegmentedControl
+        options={OPTIONS}
+        value={range}
+        onChange={onRangeChange}
+        ariaLabel="Analytics time range"
+      />
       {range === "CUSTOM" && (
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <label className="flex items-center gap-1">
-            From
-            <input
+        <div className="flex items-end gap-2">
+          <Field label="From" className="w-[190px]">
+            <Input
               type="datetime-local"
               value={customFromLocal}
               onChange={(e) => onCustomFromChange(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-slate-200"
             />
-          </label>
-          <label className="flex items-center gap-1">
-            To
-            <input
+          </Field>
+          <Field label="To" className="w-[190px]">
+            <Input
               type="datetime-local"
               value={customToLocal}
               onChange={(e) => onCustomToChange(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-slate-200"
             />
-          </label>
+          </Field>
         </div>
       )}
     </div>

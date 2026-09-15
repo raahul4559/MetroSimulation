@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { ArrowDown } from "lucide-react";
 import type { Line, Station, Track } from "@/domain/metro";
 import type { Signal, TrainState } from "@/domain/trainsim";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { OccupancyBar } from "@/components/ui/OccupancyBar";
+import { LineBadge } from "@/components/ui/LineBadge";
 import { TRAIN_STATUS_LABEL, TRAIN_STATUS_TONE, describeTrainLocation } from "@/lib/metro/trainDisplay";
 import { computeBlockChain } from "@/lib/metro/blockChain";
 
@@ -28,7 +30,7 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
   const [debugMode, setDebugMode] = useState(false);
 
   if (!train) {
-    return <p className="text-xs text-slate-500">Select a train to see its details.</p>;
+    return <p className="text-xs text-muted">Select a train to see its details.</p>;
   }
 
   const line = lines.find((l) => l.code === train.lineCode);
@@ -50,18 +52,18 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
 
   return (
     <div className="space-y-3 text-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-mono text-base font-semibold text-slate-50">{train.code}</p>
-          <p className="text-xs text-slate-500">{line?.name ?? train.lineCode}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="tabular font-mono text-base font-semibold text-content">{train.code}</p>
+          <LineBadge line={line ?? null} className="mt-1.5" />
         </div>
         <StatusBadge label={TRAIN_STATUS_LABEL[train.status]} tone={TRAIN_STATUS_TONE[train.status]} />
       </div>
 
-      <p className="text-xs text-slate-300">{describeTrainLocation(train, stationsById)}</p>
+      <p className="text-xs text-secondary">{describeTrainLocation(train, stationsById)}</p>
 
       <div>
-        <p className="mb-1 text-xs text-slate-500">Occupancy</p>
+        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">Occupancy</p>
         <OccupancyBar count={train.passengerCount} capacity={train.capacity} />
       </div>
 
@@ -73,18 +75,18 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
         <Field label="Dwell time" value={`${train.dwellTimeSeconds}s`} />
       </dl>
 
-      <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400">
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-secondary">
         <input
           type="checkbox"
           checked={debugMode}
           onChange={() => setDebugMode((v) => !v)}
-          className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-800"
+          className="size-3.5 rounded accent-[var(--color-accent)]"
         />
         Debug mode
       </label>
 
       {debugMode && (
-        <div className="space-y-1.5 rounded-md border border-slate-800 bg-slate-900/60 p-2.5 text-xs">
+        <div className="space-y-1.5 rounded-md bg-surface-sunken p-2.5 text-xs ring-1 ring-inset ring-divider">
           <ChainRow label="Train" value={train.code} />
           <ChainArrow />
           <ChainRow label="Current block" value={trackLabel(chain.currentTrackId)} />
@@ -94,11 +96,11 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
           <ChainRow label="Signal" value={nextSignal?.id ?? "None"} />
           <ChainArrow />
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">Signal state</span>
+            <span className="text-muted">Signal state</span>
             {nextSignal ? (
               <StatusBadge label={nextSignal.aspect} tone={ASPECT_TONE[nextSignal.aspect]} />
             ) : (
-              <span className="text-slate-400">—</span>
+              <span className="text-secondary">—</span>
             )}
           </div>
         </div>
@@ -110,8 +112,8 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="text-slate-200">{value}</dd>
+      <dt className="text-muted">{label}</dt>
+      <dd className="tabular text-content">{value}</dd>
     </div>
   );
 }
@@ -119,12 +121,16 @@ function Field({ label, value }: { label: string; value: string }) {
 function ChainRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-slate-200">{value}</span>
+      <span className="text-muted">{label}</span>
+      <span className="tabular text-content">{value}</span>
     </div>
   );
 }
 
 function ChainArrow() {
-  return <div className="text-center text-slate-600">↓</div>;
+  return (
+    <div className="flex justify-center text-muted" aria-hidden>
+      <ArrowDown size={12} />
+    </div>
+  );
 }

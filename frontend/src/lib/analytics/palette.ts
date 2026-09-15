@@ -1,14 +1,31 @@
-/** Chart colors for the analytics dashboard, picked from this app's existing Tailwind slate/blue
- * dark theme rather than the dataviz skill's generic reference hex — see that skill's guidance on
- * substituting a design system's own values. `statusGood`/`Warning`/`Critical` intentionally match
- * `StatusBadge`'s existing emerald/amber/red tones so a color means the same thing everywhere in
- * this app, and are never reused for a plain (non-status) series. */
+import { TONE_HEX } from "@/lib/ui/tone";
+
+/**
+ * Chart colours for the analytics dashboard.
+ *
+ * Status hues are no longer restated here — they resolve through the shared tone scale, so an
+ * "at risk" amber on a chart is byte-identical to an "at risk" amber on a badge or an occupancy
+ * bar. Previously this file held its own copy and three other files held three more, which is how
+ * the app ended up with four different greens all meaning "good".
+ *
+ * Series colours stay distinct from status colours and are never reused for one: a line on a chart
+ * must not be readable as a verdict.
+ */
 export const CHART_COLORS = {
-  seriesPrimary: "#60a5fa", // blue-400
-  seriesSecondary: "#a78bfa", // violet-400
-  statusGood: "#10b981", // emerald-500
-  statusWarning: "#f59e0b", // amber-500
-  statusCritical: "#ef4444", // red-500
+  seriesPrimary: "#60a5fa",
+  seriesSecondary: "#a78bfa",
+  statusGood: TONE_HEX.positive,
+  statusWarning: TONE_HEX.warning,
+  statusCritical: TONE_HEX.danger,
+} as const;
+
+/** Chart chrome, pulled from the surface tokens so plots sit correctly on a panel. */
+export const CHART_CHROME = {
+  grid: "#1b1f24",
+  axis: "#2f3339",
+  crosshair: "#4a4f57",
+  /** Halo behind an emphasised point, so it reads as lifted off the plot. */
+  halo: "#0a0b0d",
 } as const;
 
 export function congestionColor(level: "LOW" | "MEDIUM" | "HIGH"): string {

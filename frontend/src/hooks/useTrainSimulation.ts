@@ -18,7 +18,7 @@ interface TrainSimulationResult {
 }
 
 /** Bridges the discrete-time train simulation engine (`/api/simulation`, `/topic/train-simulation/state`)
- * into React state — the trainsim analogue of `useSimulationState` for the legacy clock. */
+ * into React state. */
 export function useTrainSimulation(): TrainSimulationResult {
   const [state, setState] = useState<SimulationState | null>(null);
   const [isBusy, setIsBusy] = useState(false);

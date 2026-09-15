@@ -1,6 +1,11 @@
-import type { DisruptionStatus, DisruptionType } from "@/domain/trainsim";
+import type {
+  AffectedResourceType,
+  DisruptionSeverity,
+  DisruptionStatus,
+  DisruptionType,
+} from "@/domain/trainsim";
 
-type Tone = "neutral" | "positive" | "warning" | "danger";
+import type { Tone } from "@/lib/ui/tone";
 
 export const DISRUPTION_STATUS_LABEL: Record<DisruptionStatus, string> = {
   SCHEDULED: "Scheduled",
@@ -23,4 +28,25 @@ export const DISRUPTION_TYPE_LABEL: Record<DisruptionType, string> = {
   TRACK_BLOCKAGE: "Track blockage",
   EXTENDED_DWELL: "Extended dwell",
   CUSTOM_DELAY: "Manual delay",
+};
+
+export const DISRUPTION_SEVERITY_LABEL: Record<DisruptionSeverity, string> = {
+  MINOR: "Minor",
+  MODERATE: "Moderate",
+  MAJOR: "Major",
+  SEVERE: "Severe",
+};
+
+/** Severity reads as escalating attention, not as four arbitrary colours. */
+export const DISRUPTION_SEVERITY_TONE: Record<DisruptionSeverity, Tone> = {
+  MINOR: "neutral",
+  MODERATE: "warning",
+  MAJOR: "warning",
+  SEVERE: "danger",
+};
+
+export const RESOURCE_TYPE_LABEL: Record<AffectedResourceType, string> = {
+  TRAIN: "Train",
+  TRACK: "Track",
+  STATION: "Station",
 };

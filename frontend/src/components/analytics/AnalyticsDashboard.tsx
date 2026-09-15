@@ -5,12 +5,36 @@ import { useAnalytics } from "@/hooks/useAnalytics";
 import { TimeRangePicker } from "./TimeRangePicker";
 import { KindBadge } from "./KindBadge";
 import { StatTile } from "@/components/charts/StatTile";
+import {
+  avgDelayTone,
+  maxDelayTone,
+  onTimeTone,
+  zeroIsGoodTone,
+} from "@/lib/analytics/thresholds";
 import { ChartCard } from "@/components/charts/ChartCard";
 import { LineChart } from "@/components/charts/LineChart";
 import { BarChart } from "@/components/charts/BarChart";
 import { CHART_COLORS, congestionColor, waitBucketColor } from "@/lib/analytics/palette";
 import { formatCount, formatElapsed, formatPct, formatSeconds, formatSpeed } from "@/lib/analytics/format";
-import type { AnalyticsRange } from "@/domain/trainsim/analytics";
+import type { AnalyticsRange, CongestionLevel } from "@/domain/trainsim/analytics";
+
+const CONGESTION_LABEL: Record<CongestionLevel, string> = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+};
+
+/** Tinted chip in the congestion colour. `color-mix` keeps the tint tied to the one source colour
+ * instead of the old trick of appending "22" to the hex to fake an alpha channel. */
+function congestionChipStyle(level: CongestionLevel): React.CSSProperties {
+  const color = congestionColor(level);
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+    // ring-1 ring-inset picks its colour up from here.
+    "--tw-ring-color": `color-mix(in srgb, ${color} 28%, transparent)`,
+  } as React.CSSProperties;
+}
 
 function toLocalInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -60,16 +84,23 @@ export function AnalyticsDashboard() {
     }));
   }, [data]);
 
+  /** Indexed once rather than re-scanned per row — the table renders every station in the network
+   *  and the previous `live.stations.find()` inside the row map made it quadratic. */
+  const liveStationById = useMemo(
+    () => new Map((data?.live.stations ?? []).map((s) => [s.stationId, s])),
+    [data],
+  );
+
   const stationRows = useMemo(() => {
     if (!data) return [];
     return [...data.simulationResult.stations].sort((a, b) => b.throughput - a.throughput);
   }, [data]);
 
   if (isLoading && !data) {
-    return <p className="text-sm text-slate-500">Loading analytics…</p>;
+    return <p className="text-sm text-muted">Loading analytics…</p>;
   }
   if (error && !data) {
-    return <p className="text-sm text-red-400">{error}</p>;
+    return <p className="text-sm text-danger">{error}</p>;
   }
   if (!data) {
     return null;
@@ -88,21 +119,26 @@ export function AnalyticsDashboard() {
           onCustomFromChange={setCustomFromLocal}
           onCustomToChange={setCustomToLocal}
         />
-        <p className="text-xs text-slate-500">
-          Sim time <span className="text-slate-300">{new Date(meta.generatedAtSimTime).toLocaleString()}</span> · tick{" "}
-          {formatCount(meta.generatedAtTick)}
+        <p className="tabular text-xs text-muted">
+          Sim time{" "}
+          <span className="text-secondary">{new Date(meta.generatedAtSimTime).toLocaleString()}</span> ·
+          tick {formatCount(meta.generatedAtTick)}
         </p>
       </div>
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-muted">
         <KindBadge kind="LIVE" /> reflects this instant, always — the range picker only scopes{" "}
         <KindBadge kind="SIMULATION_RESULT" /> totals and <KindBadge kind="HISTORICAL" /> charts below.
       </p>
-      {error && <p className="text-xs text-amber-400">Last refresh failed: {error} (showing last known data)</p>}
+      {error && (
+        <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning ring-1 ring-inset ring-warning/25">
+          Last refresh failed: {error} — showing last known data.
+        </p>
+      )}
 
       {/* ---- Network ---- */}
       <section>
         <div className="mb-2 flex items-center gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Network</h2>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted">Network</h2>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatTile label="Active trains" value={formatCount(live.network.activeTrains)} sublabel="LIVE" />
@@ -117,34 +153,34 @@ export function AnalyticsDashboard() {
             label="Active disruptions"
             value={formatCount(live.network.activeDisruptions)}
             sublabel="LIVE — why delays are happening"
-            tone={live.network.activeDisruptions > 0 ? "warning" : "good"}
+            tone={zeroIsGoodTone(live.network.activeDisruptions)}
           />
         </div>
       </section>
 
       {/* ---- Trains ---- */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Trains</h2>
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">Trains</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
           <StatTile label="Avg speed (now)" value={formatSpeed(live.trains.avgSpeedKmph)} sublabel="LIVE" />
           <StatTile
             label="Avg delay (now)"
             value={formatSeconds(live.trains.currentAvgDelaySeconds)}
             sublabel="LIVE"
-            tone={live.trains.currentAvgDelaySeconds > 0 ? "warning" : "good"}
+            tone={avgDelayTone(live.trains.currentAvgDelaySeconds)}
           />
           <StatTile
             label="Max delay (now)"
             value={formatSeconds(live.trains.currentMaxDelaySeconds)}
             sublabel="LIVE"
-            tone={live.trains.currentMaxDelaySeconds > 120 ? "critical" : "neutral"}
+            tone={maxDelayTone(live.trains.currentMaxDelaySeconds)}
           />
           <StatTile label="Utilization (now)" value={formatPct(live.trains.trainUtilizationPct)} sublabel="LIVE" />
           <StatTile
             label="On-time %"
             value={formatPct(simulationResult.trains.onTimePct)}
             sublabel="SIMULATION RESULT"
-            tone={simulationResult.trains.onTimePct >= 90 ? "good" : simulationResult.trains.onTimePct >= 75 ? "warning" : "critical"}
+            tone={onTimeTone(simulationResult.trains.onTimePct)}
           />
           <StatTile label="Avg speed (range)" value={formatSpeed(simulationResult.trains.avgSpeedKmph)} sublabel="SIMULATION RESULT" />
           <StatTile label="Avg delay (range)" value={formatSeconds(simulationResult.trains.avgDelaySeconds)} sublabel="SIMULATION RESULT" />
@@ -155,7 +191,7 @@ export function AnalyticsDashboard() {
 
       {/* ---- Passengers ---- */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Passengers</h2>
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">Passengers</h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
           <StatTile label="Total generated" value={formatCount(simulationResult.passengers.totalGenerated)} sublabel="SIMULATION RESULT" />
           <StatTile label="Total completed" value={formatCount(simulationResult.passengers.totalCompleted)} sublabel="SIMULATION RESULT" />
@@ -166,14 +202,14 @@ export function AnalyticsDashboard() {
             label="Unable to board"
             value={formatCount(simulationResult.passengers.unableToBoard)}
             sublabel="SIMULATION RESULT"
-            tone={simulationResult.passengers.unableToBoard > 0 ? "warning" : "good"}
+            tone={zeroIsGoodTone(simulationResult.passengers.unableToBoard)}
           />
         </div>
       </section>
 
       {/* ---- Charts ---- */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Charts</h2>
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">Charts</h2>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <ChartCard
             title="Passenger demand over time"
@@ -293,13 +329,13 @@ export function AnalyticsDashboard() {
       {/* ---- Stations ---- */}
       <section>
         <div className="mb-2 flex items-center gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Stations</h2>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-muted">Stations</h2>
           <KindBadge kind="SIMULATION_RESULT" />
-          <span className="text-xs text-slate-600">since simulation start — not range-scoped</span>
+          <span className="text-xs text-muted">since simulation start — not range-scoped</span>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-slate-800">
+        <div className="scroll-thin overflow-x-auto rounded-lg border border-edge bg-surface">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900/80 text-slate-500">
+            <thead className="bg-white/3 text-muted">
               <tr>
                 <th className="px-3 py-2 font-medium">Station</th>
                 <th className="px-3 py-2 font-medium">Throughput</th>
@@ -309,11 +345,11 @@ export function AnalyticsDashboard() {
                 <th className="px-3 py-2 font-medium">Congestion (now)</th>
               </tr>
             </thead>
-            <tbody className="[font-variant-numeric:tabular-nums]">
+            <tbody className="tabular">
               {stationRows.map((s) => {
-                const liveStation = live.stations.find((ls) => ls.stationId === s.stationId);
+                const liveStation = liveStationById.get(s.stationId);
                 return (
-                  <tr key={s.stationId} className="border-t border-slate-800/60 text-slate-300">
+                  <tr key={s.stationId} className="border-t border-divider text-secondary">
                     <td className="px-3 py-1.5">{s.name}</td>
                     <td className="px-3 py-1.5">{formatCount(s.throughput)}</td>
                     <td className="px-3 py-1.5">{s.avgQueue.toFixed(1)}</td>
@@ -322,10 +358,10 @@ export function AnalyticsDashboard() {
                     <td className="px-3 py-1.5">
                       {liveStation && (
                         <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
-                          style={{ backgroundColor: `${congestionColor(liveStation.congestionLevel)}22`, color: congestionColor(liveStation.congestionLevel) }}
+                          className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ring-1 ring-inset"
+                          style={congestionChipStyle(liveStation.congestionLevel)}
                         >
-                          {liveStation.congestionLevel}
+                          {CONGESTION_LABEL[liveStation.congestionLevel]}
                         </span>
                       )}
                     </td>

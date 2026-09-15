@@ -1,18 +1,27 @@
 import type { PropsWithChildren, ReactNode } from "react";
+import { cn } from "@/lib/ui/cn";
+import { Surface, SurfaceHeader } from "./Surface";
 
 interface PanelProps extends PropsWithChildren {
   title: string;
+  description?: string;
   action?: ReactNode;
+  /** Tightens padding for dense rails where several panels stack. */
+  dense?: boolean;
+  className?: string;
 }
 
-export function Panel({ title, action, children }: PanelProps) {
+/** A titled section. Now a thin composition over Surface — kept as its own name because a
+ * dozen call sites read better as `<Panel title="Trains">` than as Surface + header. */
+export function Panel({ title, description, action, dense = false, className, children }: PanelProps) {
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
-        {action}
-      </div>
+    <Surface as="section" padding={dense ? "sm" : "md"} className={cn("min-w-0", className)}>
+      <SurfaceHeader
+        title={title}
+        {...(description !== undefined ? { description } : {})}
+        {...(action !== undefined ? { action } : {})}
+      />
       {children}
-    </section>
+    </Surface>
   );
 }

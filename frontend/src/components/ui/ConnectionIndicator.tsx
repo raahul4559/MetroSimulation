@@ -1,4 +1,6 @@
-import type { ConnectionStatus } from "@/lib/ws/simulation-socket";
+import type { ConnectionStatus } from "@/lib/ws/train-simulation-socket";
+import { StatusIndicator } from "./StatusIndicator";
+import type { Tone } from "@/lib/ui/tone";
 
 const LABEL: Record<ConnectionStatus, string> = {
   connecting: "Connecting…",
@@ -6,17 +8,16 @@ const LABEL: Record<ConnectionStatus, string> = {
   disconnected: "Disconnected",
 };
 
-const DOT_CLASSES: Record<ConnectionStatus, string> = {
-  connecting: "bg-amber-400 animate-pulse",
-  connected: "bg-emerald-400",
-  disconnected: "bg-red-500",
+const TONE: Record<ConnectionStatus, Tone> = {
+  connecting: "warning",
+  connected: "positive",
+  disconnected: "danger",
 };
 
+/** The simulation feed's state, in the navbar. A thin wrapper over StatusIndicator so the
+ * connection dot cannot drift away from every other status dot in the app. */
 export function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
   return (
-    <div className="flex items-center gap-2 text-xs text-slate-400">
-      <span className={`h-2 w-2 rounded-full ${DOT_CLASSES[status]}`} aria-hidden />
-      {LABEL[status]}
-    </div>
+    <StatusIndicator label={LABEL[status]} tone={TONE[status]} pulse={status === "connecting"} />
   );
 }
