@@ -70,6 +70,7 @@ export default function StationAssetsPage() {
               value={report.invalidStationCount}
               tone={report.invalidStationCount > 0 ? "danger" : "positive"}
             />
+            <SummaryTile label="With visual references" value={report.withReferencesCount} tone="neutral" />
           </div>
 
           <Panel title="Stations">
@@ -83,6 +84,7 @@ export default function StationAssetsPage() {
                     <th className="py-2 pr-3 font-medium">Quality</th>
                     <th className="py-2 pr-3 font-medium">model.glb</th>
                     <th className="py-2 pr-3 font-medium">environment.glb</th>
+                    <th className="py-2 pr-3 font-medium">References</th>
                     <th className="py-2 font-medium">Issues</th>
                   </tr>
                 </thead>
@@ -100,6 +102,13 @@ export default function StationAssetsPage() {
                       </td>
                       <td className="py-2 pr-3 text-slate-300">{entry.modelAvailable ? "✓" : "—"}</td>
                       <td className="py-2 pr-3 text-slate-300">{entry.environmentAvailable ? "✓" : "—"}</td>
+                      <td className="py-2 pr-3">
+                        {entry.referenceConfidence ? (
+                          <StatusBadge label={entry.referenceConfidence} tone={referenceTone(entry.referenceConfidence)} />
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
                       <td className="py-2 text-slate-300">
                         {entry.issues.length === 0 ? (
                           <span className="text-emerald-400">None</span>
@@ -128,6 +137,12 @@ export default function StationAssetsPage() {
 function qualityTone(quality: StationValidationReport["entries"][number]["quality"]): "positive" | "neutral" | "warning" {
   if (quality === "HIGH") return "positive";
   if (quality === "RECONSTRUCTED") return "neutral";
+  return "warning";
+}
+
+function referenceTone(confidence: NonNullable<StationValidationReport["entries"][number]["referenceConfidence"]>): "positive" | "neutral" | "warning" {
+  if (confidence === "high") return "positive";
+  if (confidence === "medium") return "neutral";
   return "warning";
 }
 

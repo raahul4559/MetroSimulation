@@ -1,5 +1,6 @@
 import type { Line, Station } from "@/domain/metro";
 import type { StationConfig, StationModelQuality } from "@/domain/stationConfig";
+import type { ReferenceConfidence } from "@/domain/stationVisualReference";
 import { getStationConfig } from "@/config/stations/stationConfigs";
 import { checkAssetExists } from "./assetAvailability";
 
@@ -15,6 +16,9 @@ export interface StationValidationEntry {
   readonly quality: StationModelQuality;
   readonly modelAvailable: boolean;
   readonly environmentAvailable: boolean;
+  /** `null` when this station has no `references.json` yet — distinct from a low-confidence entry
+   * that does exist, so the dashboard can tell "not researched" apart from "researched, sparse." */
+  readonly referenceConfidence: ReferenceConfidence | null;
   readonly issues: readonly StationValidationIssue[];
 }
 
@@ -23,6 +27,7 @@ export interface StationValidationReport {
   readonly byQuality: Readonly<Record<StationModelQuality, number>>;
   readonly invalidStationCount: number;
   readonly missingAssetCount: number;
+  readonly withReferencesCount: number;
   readonly entries: readonly StationValidationEntry[];
 }
 
@@ -42,10 +47,12 @@ export async function assessStationAssets(
   const byQuality: Record<StationModelQuality, number> = { HIGH: 0, RECONSTRUCTED: 0, PROCEDURAL: 0 };
   let invalidStationCount = 0;
   let missingAssetCount = 0;
+  let withReferencesCount = 0;
   for (const entry of entries) {
     byQuality[entry.quality] += 1;
     if (entry.issues.length > 0) invalidStationCount += 1;
     if (!entry.modelAvailable) missingAssetCount += 1;
+    if (entry.referenceConfidence != null) withReferencesCount += 1;
   }
 
   return {
@@ -53,15 +60,17 @@ export async function assessStationAssets(
     byQuality,
     invalidStationCount,
     missingAssetCount,
+    withReferencesCount,
     entries,
   };
 }
 
 async function assessStation(station: Station, lines: readonly Line[]): Promise<StationValidationEntry> {
   const config = getStationConfig(station, lines);
-  const [modelAvailable, environmentAvailable] = await Promise.all([
+  const [modelAvailable, environmentAvailable, referenceConfidence] = await Promise.all([
     checkAssetExists(config.modelPath),
     checkAssetExists(config.environmentPath),
+    fetchReferenceConfidence(config.id),
   ]);
   const quality: StationModelQuality = modelAvailable ? "HIGH" : config.synthesized ? "PROCEDURAL" : "RECONSTRUCTED";
 
@@ -72,8 +81,26 @@ async function assessStation(station: Station, lines: readonly Line[]): Promise<
     quality,
     modelAvailable,
     environmentAvailable,
+    referenceConfidence,
     issues: validateStationEntry(station, lines, config, modelAvailable, environmentAvailable),
   };
+}
+
+/** Reads just the `referenceConfidence` field out of `public/stations/<id>/references.json`, if
+ * it exists — a real `GET` rather than `checkAssetExists`'s `HEAD`, since the dashboard needs the
+ * file's content, not just its presence. `null` on any failure (missing file, bad JSON, wrong
+ * shape) so a broken references file degrades to "not researched," never a page-wide error. */
+async function fetchReferenceConfidence(stationId: string): Promise<ReferenceConfidence | null> {
+  try {
+    const res = await fetch(`/stations/${stationId}/references.json`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { referenceConfidence?: unknown };
+    return data.referenceConfidence === "high" || data.referenceConfidence === "medium" || data.referenceConfidence === "low"
+      ? data.referenceConfidence
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function validateStationEntry(
