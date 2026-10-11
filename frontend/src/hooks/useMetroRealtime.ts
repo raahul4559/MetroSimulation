@@ -3,7 +3,7 @@ import type { MetroStateFrame } from "@/domain/realtime";
 import { realtimeApi } from "@/lib/api/realtime";
 import { ApiError } from "@/lib/api/client";
 import { connectRealtimeSocket, type ConnectionStatus } from "@/lib/ws/realtime-socket";
-import { recordServerTime } from "@/lib/realtime/serverClock";
+import { localNowMs, recordServerTime } from "@/lib/realtime/serverClock";
 
 /** The backend publishes at least once a second; this long without a frame means the feed to this
  * browser has stalled even if the socket still claims to be open. */
@@ -52,13 +52,13 @@ export function useMetroRealtime(): MetroRealtimeResult {
   }, []);
 
   const refresh = useCallback(() => {
-    const requestedAt = Date.now();
+    const requestedAt = localNowMs();
     realtimeApi
       .getState()
       .then((state) => {
         // Over REST the response could have been stamped any time during the round trip; the
         // midpoint is the fair receive time for clock-offset purposes.
-        accept(state, (requestedAt + Date.now()) / 2);
+        accept(state, (requestedAt + localNowMs()) / 2);
       })
       .catch((err) => {
         setError(err instanceof ApiError ? err.message : "Failed to load the metro state.");
@@ -77,7 +77,7 @@ export function useMetroRealtime(): MetroRealtimeResult {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const isStalled = lastFrameAt.current > 0 && Date.now() - lastFrameAt.current > FRAME_STALL_MS;
+      const isStalled = lastFrameAt.current > 0 && localNowMs() - lastFrameAt.current > FRAME_STALL_MS;
       setStalled((was) => {
         if (isStalled && !was) console.warn(`[realtime] No state frame for ${FRAME_STALL_MS / 1000}s`);
         return isStalled;

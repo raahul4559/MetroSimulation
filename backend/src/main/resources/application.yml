@@ -83,4 +83,10 @@ realtime:
     #       - { from: "HH:mm", to: "HH:mm", headway-seconds: 300 }
     #     sunday:
     #       - { from: "HH:mm", to: "HH:mm", headway-seconds: 600 }
+    # Date-specific exceptions (lines omitted = all lines):
+    # exceptions:
+    #   - { date: 2026-11-01, type: RUN_AS, run-as: SUNDAY, note: "Kannada Rajyotsava" }
+    #   - { date: 2026-12-31, type: SPECIAL_HOURS, lines: [PURPLE], note: "New Year's Eve extension",
+    #       periods: [ { from: "HH:mm", to: "HH:mm", headway-seconds: 300 } ] }
+    #   - { date: 2026-10-20, type: CLOSED, lines: [YELLOW], note: "Maintenance block" }
     source: ""

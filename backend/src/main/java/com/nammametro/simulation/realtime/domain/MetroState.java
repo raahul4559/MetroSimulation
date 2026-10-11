@@ -34,7 +34,7 @@ public record MetroState(
         boolean activeSourceStale,
         String sourceReason,
         List<ProviderHealth> providers,
-        List<LineOperatingStatus> lines,
+        NetworkServiceStatus service,
         List<MetroTrain> trains,
         List<MetroAlert> alerts,
         SimulationState simulation

@@ -5,6 +5,7 @@ import com.nammametro.simulation.realtime.domain.MetroAlert;
 import com.nammametro.simulation.realtime.domain.MetroState;
 import com.nammametro.simulation.realtime.domain.MetroTime;
 import com.nammametro.simulation.realtime.domain.MetroTrain;
+import com.nammametro.simulation.realtime.domain.NetworkServiceStatus;
 import com.nammametro.simulation.realtime.domain.ProviderHealth;
 import com.nammametro.simulation.trainsim.api.rest.dto.DisruptionResponse;
 import com.nammametro.simulation.trainsim.api.rest.dto.PassengerMetricsResponse;
@@ -40,7 +41,7 @@ public record MetroStateResponse(
         boolean activeSourceStale,
         String sourceReason,
         List<ProviderHealthResponse> providers,
-        List<LineStatusResponse> lines,
+        ServiceStatusResponse service,
         List<MetroTrainResponse> trains,
         List<AlertResponse> alerts,
         SimulationExtrasResponse simulation
@@ -62,7 +63,7 @@ public record MetroStateResponse(
                 state.activeSourceStale(),
                 state.sourceReason(),
                 state.providers().stream().map(ProviderHealthResponse::from).toList(),
-                state.lines().stream().map(LineStatusResponse::from).toList(),
+                ServiceStatusResponse.from(state.service()),
                 state.trains().stream().map(MetroTrainResponse::from).toList(),
                 state.alerts().stream().map(AlertResponse::from).toList(),
                 state.simulation() == null ? null : SimulationExtrasResponse.from(state.simulation()));
@@ -70,6 +71,10 @@ public record MetroStateResponse(
 
     static String iso(Instant instant) {
         return instant == null ? null : instant.toString();
+    }
+
+    static String ist(Instant instant) {
+        return instant == null ? null : instant.atZone(MetroTime.ZONE).toOffsetDateTime().toString();
     }
 
     public record MetroTrainResponse(
@@ -142,6 +147,44 @@ public record MetroStateResponse(
         }
     }
 
+    /**
+     * The operating status ({@code ServiceStatusEngine}). Every instant is given twice: ISO UTC for
+     * machines, and IST ("…+05:30") for display — so no client converts with its own timezone.
+     */
+    public record ServiceStatusResponse(
+            String evaluatedAt,
+            String evaluatedAtIst,
+            String serviceDay,
+            String dayType,
+            String state,
+            String reason,
+            boolean started,
+            boolean operating,
+            boolean ended,
+            String firstDepartureAt,
+            String firstDepartureAtIst,
+            String lastDepartureAt,
+            String lastDepartureAtIst,
+            String nextServiceAt,
+            String nextServiceAtIst,
+            String nextServiceLineCode,
+            List<String> scheduleExceptions,
+            boolean timetableConfigured,
+            String timetableSource,
+            List<LineStatusResponse> lines,
+            List<String> disruptionAlertIds
+    ) {
+
+        public static ServiceStatusResponse from(NetworkServiceStatus s) {
+            return new ServiceStatusResponse(iso(s.evaluatedAt()), ist(s.evaluatedAt()), s.serviceDay().toString(),
+                    s.dayType(), s.state().name(), s.reason(), s.started(), s.operating(), s.ended(),
+                    iso(s.firstDepartureAt()), ist(s.firstDepartureAt()), iso(s.lastDepartureAt()),
+                    ist(s.lastDepartureAt()), iso(s.nextServiceAt()), ist(s.nextServiceAt()), s.nextServiceLineCode(),
+                    s.scheduleExceptions(), s.timetableConfigured(), s.timetableSource(),
+                    s.lines().stream().map(LineStatusResponse::from).toList(), s.disruptionAlertIds());
+        }
+    }
+
     public record LineStatusResponse(
             String lineCode,
             String state,
@@ -149,12 +192,15 @@ public record MetroStateResponse(
             String reason,
             String firstDeparture,
             String lastDeparture,
-            int trainsReported
+            String nextServiceAt,
+            String nextServiceAtIst,
+            int trainsReported,
+            List<String> alertIds
     ) {
 
         public static LineStatusResponse from(LineOperatingStatus s) {
             return new LineStatusResponse(s.lineCode(), s.state().name(), s.basis(), s.reason(), s.firstDeparture(),
-                    s.lastDeparture(), s.trainsReported());
+                    s.lastDeparture(), iso(s.nextServiceAt()), ist(s.nextServiceAt()), s.trainsReported(), s.alertIds());
         }
     }
 

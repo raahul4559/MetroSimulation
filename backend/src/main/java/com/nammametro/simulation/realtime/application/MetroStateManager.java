@@ -3,8 +3,6 @@ package com.nammametro.simulation.realtime.application;
 import com.nammametro.simulation.domain.model.SimulationStatus;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.realtime.domain.DataSource;
-import com.nammametro.simulation.realtime.domain.LineOperatingStatus;
-import com.nammametro.simulation.realtime.domain.LineOperatingStatus.OperatingState;
 import com.nammametro.simulation.realtime.domain.MetroAlert;
 import com.nammametro.simulation.realtime.domain.MetroState;
 import com.nammametro.simulation.realtime.domain.MetroTime;
@@ -76,6 +74,7 @@ public class MetroStateManager {
     private final MetroNetwork network;
     private final ServiceCalendar calendar;
     private final FeedNormalizer normalizer;
+    private final ServiceStatusEngine serviceStatus;
     private final RealtimeSettings settings;
     private final TrainSimulationControlUseCase simulation;
     private final MetroStatePublisher publisher;
@@ -100,6 +99,7 @@ public class MetroStateManager {
         this.calendar = calendar;
         this.settings = settings;
         this.normalizer = new FeedNormalizer(network, settings);
+        this.serviceStatus = new ServiceStatusEngine(calendar, network);
         this.simulation = simulation;
         this.publisher = publisher;
         this.mode = new AtomicReference<>(initialMode);
@@ -278,7 +278,7 @@ public class MetroStateManager {
         version++;
         return new MetroState(instanceId, version, now, MetroTime.ZONE.getId(), serviceDay,
                 calendar.dayType(serviceDay).name(), requested, active, activeStale, selection.reason(),
-                orderedHealth(health), lineStatuses(now, trains, alerts), trains, alerts, simulationState);
+                orderedHealth(health), serviceStatus.evaluate(now, alerts, trains), trains, alerts, simulationState);
     }
 
     // --- source selection -------------------------------------------------------------------------
@@ -501,27 +501,6 @@ public class MetroStateManager {
             }
         }
         return withIds;
-    }
-
-    private List<LineOperatingStatus> lineStatuses(Instant now, List<MetroTrain> trains, List<MetroAlert> alerts) {
-        Map<String, Long> counts = new HashMap<>();
-        for (MetroTrain train : trains) {
-            counts.merge(train.lineCode(), 1L, Long::sum);
-        }
-        return calendar.statuses(now).stream().map(status -> {
-            int reported = counts.getOrDefault(status.lineCode(), 0L).intValue();
-            Optional<MetroAlert> suspension = alerts.stream()
-                    .filter(MetroAlert::suspendsService)
-                    .filter(a -> a.lineCodes().contains(status.lineCode()) && a.stationIds().isEmpty())
-                    .findFirst();
-            if (suspension.isPresent()) {
-                String reason = suspension.get().headerText() != null ? suspension.get().headerText() : "Service suspended";
-                return new LineOperatingStatus(status.lineCode(), OperatingState.SUSPENDED, "ALERT", reason,
-                        status.firstDeparture(), status.lastDeparture(), reported);
-            }
-            return new LineOperatingStatus(status.lineCode(), status.state(), status.basis(), status.reason(),
-                    status.firstDeparture(), status.lastDeparture(), reported);
-        }).toList();
     }
 
     private static boolean isActive(MetroAlert alert, Instant now) {

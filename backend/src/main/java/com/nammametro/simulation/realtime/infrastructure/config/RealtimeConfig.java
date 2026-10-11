@@ -130,7 +130,52 @@ public class RealtimeConfig {
             }
         }
         return new Timetable(properties.source(), rollover,
-                properties.holidays() == null ? null : new java.util.HashSet<>(properties.holidays()), lines);
+                properties.holidays() == null ? null : new java.util.HashSet<>(properties.holidays()), lines,
+                toExceptions(properties.exceptions(), network));
+    }
+
+    private static List<Timetable.ScheduleException> toExceptions(List<RealtimeProperties.Exception> exceptions,
+                                                                  MetroNetwork network) {
+        if (exceptions == null) {
+            return List.of();
+        }
+        List<Timetable.ScheduleException> converted = new ArrayList<>();
+        for (int i = 0; i < exceptions.size(); i++) {
+            RealtimeProperties.Exception e = exceptions.get(i);
+            String where = "realtime.timetable.exceptions[%d]".formatted(i);
+            if (e.date() == null || e.type() == null) {
+                throw new IllegalStateException(where + " needs both 'date' and 'type'");
+            }
+            java.util.Set<String> lineCodes = new java.util.HashSet<>();
+            for (String line : e.lines() == null ? List.<String>of() : e.lines()) {
+                String code = line.toUpperCase();
+                if (network.findLineByCode(code).isEmpty()) {
+                    throw new IllegalStateException(where + ".lines: '" + line + "' is not a line in this network");
+                }
+                lineCodes.add(code);
+            }
+            List<Timetable.ServicePeriod> periods = new ArrayList<>();
+            List<RealtimeProperties.Period> configured = e.periods() == null ? List.of() : e.periods();
+            for (int j = 0; j < configured.size(); j++) {
+                RealtimeProperties.Period p = configured.get(j);
+                String periodWhere = where + ".periods[" + j + "]";
+                if (p.from() == null || p.to() == null) {
+                    throw new IllegalStateException(periodWhere + " needs both 'from' and 'to'");
+                }
+                try {
+                    periods.add(new Timetable.ServicePeriod(parse(p.from(), periodWhere + ".from"),
+                            parse(p.to(), periodWhere + ".to"), p.headwaySeconds()));
+                } catch (IllegalArgumentException ex) {
+                    throw new IllegalStateException(periodWhere + ": " + ex.getMessage(), ex);
+                }
+            }
+            try {
+                converted.add(new Timetable.ScheduleException(e.date(), lineCodes, e.type(), e.runAs(), periods, e.note()));
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalStateException(where + ": " + ex.getMessage(), ex);
+            }
+        }
+        return converted;
     }
 
     private static void put(Map<Timetable.DayType, List<Timetable.ServicePeriod>> target, Timetable.DayType dayType,

@@ -67,7 +67,23 @@ public record RealtimeProperties(
             @DefaultValue("") String source,
             @DefaultValue("03:00") String serviceDayRollover,
             List<LocalDate> holidays,
-            Map<String, LineDays> lines
+            Map<String, LineDays> lines,
+            List<Exception> exceptions
+    ) {
+    }
+
+    /**
+     * A date-specific schedule exception. {@code lines} empty = every line. {@code type}:
+     * {@code CLOSED}, {@code SPECIAL_HOURS} (with {@code periods}), or {@code RUN_AS} (with
+     * {@code run-as}: WEEKDAY | SATURDAY | SUNDAY). {@code note} is shown to operators.
+     */
+    public record Exception(
+            LocalDate date,
+            List<String> lines,
+            com.nammametro.simulation.realtime.domain.Timetable.ScheduleException.Kind type,
+            com.nammametro.simulation.realtime.domain.Timetable.DayType runAs,
+            List<Period> periods,
+            String note
     ) {
     }
 

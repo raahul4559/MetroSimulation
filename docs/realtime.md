@@ -108,12 +108,58 @@ if frames stop.
   a new `instanceId` (backend restart). The socket reconnects with exponential backoff (1s → 30s)
   and re-seeds over REST on every reconnect. No frame for 5s marks the view "No updates · last known".
 
+## Operating status (`ServiceStatusEngine`)
+
+Every frame carries `service`, also served at `GET /api/realtime/service-status`: current IST,
+service day and day type, whether service has started / is operating / has ended, the network
+status and each line's, the first/last scheduled departure of the service day, the next scheduled
+service, any schedule exceptions in effect, and the timetable's cited source.
+
+| Status | Meaning |
+|---|---|
+| `OPERATING` | Within timetabled hours, or trains observed running (fresh `LIVE`/`GTFS_REALTIME` positions) |
+| `NOT_STARTED` | Before the service day's first departure |
+| `ENDED` | After the last departure has finished its run |
+| `SUSPENDED` | A whole-line `NO_SERVICE` alert, or a `CLOSED` exception for the day |
+| `DISRUPTED` | Running under an alert affecting service (delays, reduced service, detour, station closed, anything `SEVERE`) |
+| `UNKNOWN` | No timetable for the line/day and nothing observed — never guessed |
+
+Network: running if any line runs (`DISRUPTED` if any line is disrupted/suspended meanwhile),
+`SUSPENDED` if all known lines are, else `NOT_STARTED` if any line has yet to start, else `ENDED`.
+
+* **Source of hours: `realtime.timetable` only.** The simulation's `line_schedules` table is
+  *not* used: its times are offsets from the simulation's start (all trains leave within the first
+  10 simulated minutes), not real opening hours. With no timetable configured every line is
+  `UNKNOWN` and no next/last service time is shown anywhere.
+* Simulated trains and timetable-estimate trains are never evidence that service is running; only
+  observed fresh positions are. Simulated (injected) disruptions don't affect the real status.
+* Days roll over at `service-day-rollover` (03:00 IST by default): 00:30 IST still belongs to the
+  previous service day, so late trains read `OPERATING`, then `ENDED`, not "not started".
+* **Exceptions** (`realtime.timetable.exceptions`, see `application.yml`): `CLOSED`,
+  `SPECIAL_HOURS` (replacement periods, may run past 24:00) or `RUN_AS` (another day type's
+  timetable), per date, optionally per line, with a note shown to operators. They also drive the
+  `SCHEDULE` provider. Holidays (`holidays:`) run the Sunday timetable.
+* The next scheduled service looks up to 14 service days ahead (past closures and unconfigured
+  days).
+
+The frontend shows this as the status card on the map (top-left) and on /operations: the IST
+clock (server time), service state, each line, the next scheduled service when service isn't
+running *and* the timetable gives one, and how fresh the data on the map is.
+
+### Clock
+
+The browser shows server time in IST everywhere (`lib/realtime/serverClock.ts`), measured against a
+monotonic local clock so changing the computer's clock or timezone has no effect. Live pages sync
+from every frame; other pages (and any page after a 5-minute gap, a sleep, or a local clock jump)
+sync from `GET /api/realtime/time`. All formatting uses `Asia/Kolkata` explicitly.
+
 ## Endpoints
 
 | Method | Path | |
 |---|---|---|
 | GET  | `/api/realtime/state` | Current canonical state (same shape as each WebSocket frame) |
 | GET  | `/api/realtime/time`  | Authoritative server time |
+| GET  | `/api/realtime/service-status` | Operating status (same as the frame's `service`) |
 | POST | `/api/realtime/mode?value=AUTO\|LIVE\|GTFS_REALTIME\|SCHEDULE\|SIMULATION` | Change source selection |
 | GET  | `/api/realtime/providers/{source}/feed` | A provider's raw, un-normalized snapshot (diagnostics) |
 | WS   | `/topic/realtime/state` | One frame per simulation tick while the simulation is the source; otherwise every `publish-interval-ms` |

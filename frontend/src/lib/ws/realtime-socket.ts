@@ -1,6 +1,7 @@
 import { Client, ReconnectionTimeMode, type IMessage } from "@stomp/stompjs";
 import { env } from "@/config/env";
 import type { MetroStateFrame } from "@/domain/realtime";
+import { localNowMs } from "@/lib/realtime/serverClock";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -30,7 +31,7 @@ export function connectRealtimeSocket(handlers: RealtimeSocketHandlers): () => v
     onConnect: () => {
       handlers.onStatusChange("connected");
       client.subscribe(TOPIC, (message: IMessage) => {
-        const receivedAtMs = Date.now();
+        const receivedAtMs = localNowMs();
         const frame = parseFrame(message.body);
         if (frame) handlers.onFrame(frame, receivedAtMs);
       });

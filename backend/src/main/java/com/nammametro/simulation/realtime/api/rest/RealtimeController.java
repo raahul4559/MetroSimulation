@@ -39,6 +39,13 @@ public class RealtimeController {
         return MetroStateResponse.from(manager.current());
     }
 
+    /** Namma Metro's operating status right now — the same object every state frame carries as
+     * {@code service}, for clients that don't hold the realtime stream (e.g. a status widget). */
+    @GetMapping("/service-status")
+    public MetroStateResponse.ServiceStatusResponse serviceStatus() {
+        return MetroStateResponse.ServiceStatusResponse.from(manager.current().service());
+    }
+
     /** The authoritative server time, for clients that only need to sync their clock. */
     @GetMapping("/time")
     public ServerTimeResponse time() {

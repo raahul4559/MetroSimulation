@@ -157,7 +157,7 @@ export function SimulationProvider({ children }: PropsWithChildren) {
     const extras = frame?.simulation ?? null;
     const clock = extras?.clock ?? EMPTY_CLOCK;
     const trains = frame?.trains ?? [];
-    const lineStatuses = frame?.lines ?? [];
+    const service = frame?.service ?? null;
     return {
       state: frame,
       connectionStatus,
@@ -172,9 +172,9 @@ export function SimulationProvider({ children }: PropsWithChildren) {
           : "--:--:--",
       serviceRunning: extras
         ? clock.status === "RUNNING"
-        : trains.length > 0 || lineStatuses.some((l) => l.state === "OPERATING"),
+        : trains.length > 0 || service?.operating === true,
       trains,
-      lineStatuses,
+      service,
       alerts: frame?.alerts ?? [],
       providers: frame?.providers ?? [],
       // Signals, passengers and injected disruptions exist only inside the simulation; no feed

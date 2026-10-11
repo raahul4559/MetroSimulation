@@ -24,6 +24,7 @@ import { MetroMap } from "./MetroMap";
 import { MapLegend } from "./MapLegend";
 import { NetworkStatusCard } from "./NetworkStatusCard";
 import { RealtimeDiagnostics } from "@/components/realtime/RealtimeDiagnostics";
+import { ServiceStatusCard } from "@/components/realtime/ServiceStatusCard";
 import { Surface } from "@/components/ui/Surface";
 import { useMapPreferences } from "@/hooks/useMapPreferences";
 
@@ -199,6 +200,13 @@ export function NetworkStage() {
         Hidden below `sm`, where the map needs every pixel and the bottom sheet covers this corner
         anyway; the same line filter is always reachable from /operations.
       */}
+      {/* Namma Metro's operating status, top-left — the map's zoom controls hold the top-right. */}
+      {immersion.phase === "map" && (
+        <div className="pointer-events-none absolute left-3 top-3 sm:left-4 sm:top-4">
+          <ServiceStatusCard />
+        </div>
+      )}
+
       {immersion.phase === "map" && (
         <div className="pointer-events-none absolute bottom-3 left-3 hidden flex-col gap-2 sm:flex sm:bottom-4 sm:left-4">
           {preferences.diagnosticsVisible && (

@@ -26,6 +26,7 @@ import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
 import { delayStats } from "@/lib/metro/trainDisplay";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { RealtimeDiagnostics } from "@/components/realtime/RealtimeDiagnostics";
+import { ServiceStatusCard } from "@/components/realtime/ServiceStatusCard";
 
 /**
  * The operations dashboard.
@@ -162,6 +163,10 @@ export default function OperationsPage() {
         </div>
 
         <div className="min-w-0 space-y-4">
+          <Panel title="Service status" description="Namma Metro's operating status, in IST.">
+            <ServiceStatusCard variant="panel" />
+          </Panel>
+
           <Panel title="Realtime data" description="What the trains on screen are based on, and how fresh it is.">
             <RealtimeDiagnostics />
           </Panel>

@@ -4,15 +4,17 @@ import com.nammametro.simulation.domain.model.TrainDirection;
 import com.nammametro.simulation.metro.domain.model.Line;
 import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.realtime.domain.LineOperatingStatus;
-import com.nammametro.simulation.realtime.domain.LineOperatingStatus.OperatingState;
 import com.nammametro.simulation.realtime.domain.MetroTime;
+import com.nammametro.simulation.realtime.domain.ServiceState;
 import com.nammametro.simulation.realtime.domain.Timetable;
 import com.nammametro.simulation.realtime.domain.Timetable.DayType;
+import com.nammametro.simulation.realtime.domain.Timetable.ScheduleException;
 import com.nammametro.simulation.realtime.domain.Timetable.ServicePeriod;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,13 +23,17 @@ import java.util.TreeSet;
 /**
  * Answers "should this line be running right now?" from the configured {@link Timetable}, in IST.
  * Pure — no Spring, no wall-clock reads; {@code now} is always passed in, so the answer for any
- * instant is reproducible in a test.
+ * instant is reproducible in a test, and the viewer's (or the server's) own timezone never enters.
  *
- * <p>A line counts as operating from its first departure until its last departure has finished its
- * run (the last train is still in service after it leaves the terminus). With no timetable for the
- * line/day type, the answer is {@link OperatingState#UNKNOWN} — never a guess.
+ * <p>A line is in service from its first departure until its last departure has finished its run
+ * (the last train is still carrying passengers after it leaves the terminus). Date-specific
+ * {@link ScheduleException}s are applied before anything else. With no timetable for the line and
+ * day, the answer is {@link ServiceState#UNKNOWN} — never a guess.
  */
 public final class ServiceCalendar {
+
+    /** How far ahead to look for the next scheduled service (a long closure, an unconfigured day). */
+    static final int NEXT_SERVICE_HORIZON_DAYS = 14;
 
     private final Timetable timetable;
     private final MetroNetwork network;
@@ -51,6 +57,8 @@ public final class ServiceCalendar {
         return MetroTime.serviceDay(now, timetable.serviceDayRollover());
     }
 
+    /** The regular day type for a date: holidays run the Sunday timetable. Exceptions may override
+     * it for a particular line — see {@link #scheduleFor}. */
     public DayType dayType(LocalDate serviceDay) {
         if (timetable.holidays().contains(serviceDay) || serviceDay.getDayOfWeek() == DayOfWeek.SUNDAY) {
             return DayType.SUNDAY;
@@ -58,55 +66,128 @@ public final class ServiceCalendar {
         return serviceDay.getDayOfWeek() == DayOfWeek.SATURDAY ? DayType.SATURDAY : DayType.WEEKDAY;
     }
 
-    /** Every timetabled departure from each terminus on that day type, seconds into the service
-     * day, ascending and de-duplicated across period boundaries. */
-    public List<Integer> departures(String lineCode, DayType dayType) {
-        Timetable.LineTimetable line = timetable.lines().get(lineCode);
-        if (line == null) {
-            return List.of();
+    /**
+     * One line's resolved timetable for one service day, exceptions applied. {@code departures} are
+     * every timetabled departure from each terminus, seconds into the service day, ascending;
+     * empty when the line is closed that day or nothing is configured.
+     */
+    public record DaySchedule(LocalDate serviceDay, DayType dayType, List<Integer> departures, boolean closed,
+                              List<String> exceptionNotes) {
+
+        public DaySchedule {
+            departures = List.copyOf(departures);
+            exceptionNotes = List.copyOf(exceptionNotes);
+        }
+
+        public boolean hasService() {
+            return !closed && !departures.isEmpty();
+        }
+    }
+
+    public DaySchedule scheduleFor(String lineCode, LocalDate serviceDay) {
+        DayType dayType = dayType(serviceDay);
+        Timetable.LineTimetable lineTimetable = timetable.lines().get(lineCode);
+        List<ServicePeriod> periods = lineTimetable == null ? List.of() : lineTimetable.periodsFor(dayType);
+        boolean closed = false;
+        List<String> notes = new ArrayList<>();
+        for (ScheduleException exception : timetable.exceptionsFor(serviceDay, lineCode)) {
+            switch (exception.kind()) {
+                case CLOSED -> {
+                    closed = true;
+                    periods = List.of();
+                }
+                case SPECIAL_HOURS -> periods = exception.periods();
+                case RUN_AS -> {
+                    dayType = exception.runAs();
+                    periods = lineTimetable == null ? List.of() : lineTimetable.periodsFor(dayType);
+                }
+            }
+            notes.add(describe(exception));
         }
         TreeSet<Integer> departures = new TreeSet<>();
-        for (ServicePeriod period : line.periodsFor(dayType)) {
+        for (ServicePeriod period : periods) {
             for (int t = period.fromSeconds(); t <= period.toSeconds(); t += period.headwaySeconds()) {
                 departures.add(t);
             }
         }
-        return List.copyOf(departures);
+        return new DaySchedule(serviceDay, dayType, List.copyOf(departures), closed, notes);
     }
 
     public LineOperatingStatus statusFor(String lineCode, Instant now) {
         LocalDate serviceDay = serviceDay(now);
-        DayType dayType = dayType(serviceDay);
-        List<Integer> departures = departures(lineCode, dayType);
-        if (departures.isEmpty()) {
+        DaySchedule schedule = scheduleFor(lineCode, serviceDay);
+        String notes = schedule.exceptionNotes().isEmpty() ? "" : " (" + String.join("; ", schedule.exceptionNotes()) + ")";
+
+        if (schedule.closed()) {
+            return status(lineCode, ServiceState.SUSPENDED, "EXCEPTION", "No service today" + notes, null, null,
+                    nextServiceAt(lineCode, serviceDay.plusDays(1)), serviceDay);
+        }
+        if (schedule.departures().isEmpty()) {
             String reason = timetable.isConfigured()
-                    ? "No timetable configured for %s on a %s".formatted(lineCode, dayType.name().toLowerCase())
-                    : "No timetable configured";
-            return new LineOperatingStatus(lineCode, OperatingState.UNKNOWN, "TIMETABLE", reason, null, null, 0);
+                    ? "No timetable configured for %s on a %s".formatted(lineCode, schedule.dayType().name().toLowerCase())
+                    : "No timetable configured — operating hours unknown";
+            return status(lineCode, ServiceState.UNKNOWN, "NONE", reason + notes, null, null, null, serviceDay);
         }
 
-        int first = departures.getFirst();
-        int last = departures.getLast();
+        int first = schedule.departures().getFirst();
+        int last = schedule.departures().getLast();
         int runSeconds = longestRunSecondsByLine.getOrDefault(lineCode, 0);
         long secondsIntoDay = MetroTime.secondsIntoServiceDay(now, serviceDay);
         String firstText = MetroTime.formatServiceTime(first);
         String lastText = MetroTime.formatServiceTime(last);
 
         if (secondsIntoDay < first) {
-            return new LineOperatingStatus(lineCode, OperatingState.NOT_OPERATING, "TIMETABLE",
-                    "Before first train (%s IST)".formatted(firstText), firstText, lastText, 0);
+            return status(lineCode, ServiceState.NOT_STARTED, "TIMETABLE",
+                    "First train at %s IST".formatted(firstText) + notes, first, last,
+                    MetroTime.atServiceDaySeconds(serviceDay, first), serviceDay);
         }
         if (secondsIntoDay > last + runSeconds) {
-            return new LineOperatingStatus(lineCode, OperatingState.NOT_OPERATING, "TIMETABLE",
-                    "After last train (%s IST)".formatted(lastText), firstText, lastText, 0);
+            return status(lineCode, ServiceState.ENDED, "TIMETABLE",
+                    "Last train left at %s IST".formatted(lastText) + notes, first, last,
+                    nextServiceAt(lineCode, serviceDay.plusDays(1)), serviceDay);
         }
-        String reason = secondsIntoDay > last
-                ? "Last trains completing their runs"
-                : "Within timetabled hours";
-        return new LineOperatingStatus(lineCode, OperatingState.OPERATING, "TIMETABLE", reason, firstText, lastText, 0);
+        String reason = secondsIntoDay > last ? "Last trains completing their runs" : "Within timetabled hours";
+        return status(lineCode, ServiceState.OPERATING, "TIMETABLE", reason + notes, first, last, null, serviceDay);
     }
 
     public List<LineOperatingStatus> statuses(Instant now) {
         return network.allLines().stream().map(line -> statusFor(line.code(), now)).toList();
+    }
+
+    /** The first timetabled departure on or after {@code fromServiceDay}, within the horizon. */
+    public Instant nextServiceAt(String lineCode, LocalDate fromServiceDay) {
+        for (int i = 0; i < NEXT_SERVICE_HORIZON_DAYS; i++) {
+            DaySchedule schedule = scheduleFor(lineCode, fromServiceDay.plusDays(i));
+            if (schedule.hasService()) {
+                return MetroTime.atServiceDaySeconds(schedule.serviceDay(), schedule.departures().getFirst());
+            }
+        }
+        return null;
+    }
+
+    /** Every exception in force on {@code serviceDay}, for any line, described for display. */
+    public List<String> exceptionNotes(LocalDate serviceDay) {
+        return timetable.exceptions().stream().filter(e -> e.date().equals(serviceDay)).map(ServiceCalendar::describe).toList();
+    }
+
+    private LineOperatingStatus status(String lineCode, ServiceState state, String basis, String reason, Integer first,
+                                       Integer last, Instant nextServiceAt, LocalDate serviceDay) {
+        return new LineOperatingStatus(lineCode, state, basis, reason,
+                first == null ? null : MetroTime.formatServiceTime(first),
+                last == null ? null : MetroTime.formatServiceTime(last),
+                first == null ? null : MetroTime.atServiceDaySeconds(serviceDay, first),
+                last == null ? null : MetroTime.atServiceDaySeconds(serviceDay, last),
+                nextServiceAt, 0, List.of());
+    }
+
+    private static String describe(ScheduleException exception) {
+        if (exception.note() != null && !exception.note().isBlank()) {
+            return exception.note();
+        }
+        return switch (exception.kind()) {
+            case CLOSED -> "closed";
+            case SPECIAL_HOURS -> "special hours";
+            case RUN_AS -> "running the " + exception.runAs().name().toLowerCase() + " timetable";
+        };
     }
 }

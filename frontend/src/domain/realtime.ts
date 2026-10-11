@@ -33,18 +33,54 @@ export interface ProviderHealth {
   readonly warnings: readonly string[];
 }
 
-export type LineOperatingState = "OPERATING" | "NOT_OPERATING" | "SUSPENDED" | "UNKNOWN";
+/** Mirrors the backend's `ServiceState`. `UNKNOWN` (no timetable, nothing observed) is a correct
+ * answer, not an error — operating hours are never guessed. */
+export type ServiceState = "OPERATING" | "NOT_STARTED" | "ENDED" | "SUSPENDED" | "DISRUPTED" | "UNKNOWN";
 
-/** Whether a line should be running now, and on what basis (`TIMETABLE` or `ALERT`). `UNKNOWN`
- * with no timetable configured is a correct answer, not an error. */
+/** One line's operating status and the evidence for it: `TIMETABLE`, `EXCEPTION` (a date-specific
+ * schedule exception), `ALERT` (a realtime service alert), `REALTIME` (trains observed running) or
+ * `NONE`. Times are IST; `*Ist` instants carry the +05:30 offset. */
 export interface LineStatus {
   readonly lineCode: string;
-  readonly state: LineOperatingState;
-  readonly basis: string;
+  readonly state: ServiceState;
+  readonly basis: "TIMETABLE" | "EXCEPTION" | "ALERT" | "REALTIME" | "NONE";
   readonly reason: string | null;
+  /** "HH:mm" IST of today's service day; hours may exceed 23 for after-midnight trains. */
   readonly firstDeparture: string | null;
   readonly lastDeparture: string | null;
+  readonly nextServiceAt: string | null;
+  readonly nextServiceAtIst: string | null;
   readonly trainsReported: number;
+  readonly alertIds: readonly string[];
+}
+
+/**
+ * Mirrors the backend's `ServiceStatusResponse` — Namma Metro's operating status, from the
+ * configured timetable (IST), its date exceptions, realtime alerts and observed trains. Next/last
+ * service times are null unless the timetable provides them.
+ */
+export interface ServiceStatus {
+  readonly evaluatedAt: string;
+  readonly evaluatedAtIst: string;
+  readonly serviceDay: string;
+  readonly dayType: string;
+  readonly state: ServiceState;
+  readonly reason: string;
+  readonly started: boolean;
+  readonly operating: boolean;
+  readonly ended: boolean;
+  readonly firstDepartureAt: string | null;
+  readonly firstDepartureAtIst: string | null;
+  readonly lastDepartureAt: string | null;
+  readonly lastDepartureAtIst: string | null;
+  readonly nextServiceAt: string | null;
+  readonly nextServiceAtIst: string | null;
+  readonly nextServiceLineCode: string | null;
+  readonly scheduleExceptions: readonly string[];
+  readonly timetableConfigured: boolean;
+  readonly timetableSource: string;
+  readonly lines: readonly LineStatus[];
+  readonly disruptionAlertIds: readonly string[];
 }
 
 export interface RealtimeAlert {
@@ -94,7 +130,7 @@ export interface MetroStateFrame {
   readonly activeSourceStale: boolean;
   readonly sourceReason: string;
   readonly providers: readonly ProviderHealth[];
-  readonly lines: readonly LineStatus[];
+  readonly service: ServiceStatus;
   readonly trains: readonly TrainState[];
   readonly alerts: readonly RealtimeAlert[];
   readonly simulation: SimulationExtras | null;

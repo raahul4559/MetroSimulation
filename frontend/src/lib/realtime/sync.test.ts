@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Line, Station, Track } from "@/domain/metro";
-import type { MetroStateFrame } from "@/domain/realtime";
+import type { MetroStateFrame, ServiceStatus } from "@/domain/realtime";
 import type { TrainState } from "@/domain/trainsim";
 import { resolveTrainPhase } from "@/lib/station3d/trainVisual";
 import { trainPose3D } from "@/lib/station3d/position";
@@ -71,7 +71,7 @@ describe("diagnostics and labels", () => {
       instanceId: "i", version: 1, serverTime: "", serverTimeIst: "", serverEpochMillis: Date.parse("2026-10-12T04:01:00Z"),
       timezone: "Asia/Kolkata", serviceDay: "2026-10-12", dayType: "WEEKDAY", requestedMode: "AUTO",
       activeSource: "GTFS_REALTIME", isLive: true, activeSourceStale: false, sourceReason: "Auto: using GTFS",
-      providers: [], lines: [], trains: [], alerts: [], simulation: null, ...overrides,
+      providers: [], service: {} as ServiceStatus, trains: [], alerts: [], simulation: null, ...overrides,
     };
   }
 

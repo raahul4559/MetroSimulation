@@ -15,26 +15,85 @@ import java.util.Set;
  * <p>All times are seconds after midnight IST of the <em>service day</em>, GTFS-style: a train at
  * 00:30 after a late service is {@code 24:30}, i.e. 88200 seconds, of the previous service day.
  * {@code serviceDayRollover} is when one service day ends and the next begins (e.g. 03:00).
+ *
+ * <p>{@code exceptions} override the regular day-type timetable on specific service days (a
+ * closure, special hours for an event, a weekday run on the Sunday timetable). Holidays are the
+ * common case of the last and keep their own shorthand.
  */
 public record Timetable(
         String sourceCitation,
         LocalTime serviceDayRollover,
         Set<LocalDate> holidays,
-        Map<String, LineTimetable> lines
+        Map<String, LineTimetable> lines,
+        List<ScheduleException> exceptions
 ) {
 
     public Timetable {
         holidays = holidays == null ? Set.of() : Set.copyOf(holidays);
         lines = lines == null ? Map.of() : Map.copyOf(lines);
         serviceDayRollover = serviceDayRollover == null ? LocalTime.of(3, 0) : serviceDayRollover;
+        exceptions = exceptions == null ? List.of() : List.copyOf(exceptions);
+    }
+
+    public Timetable(String sourceCitation, LocalTime serviceDayRollover, Set<LocalDate> holidays,
+                     Map<String, LineTimetable> lines) {
+        this(sourceCitation, serviceDayRollover, holidays, lines, List.of());
     }
 
     public static Timetable empty() {
-        return new Timetable("", LocalTime.of(3, 0), Set.of(), Map.of());
+        return new Timetable("", LocalTime.of(3, 0), Set.of(), Map.of(), List.of());
     }
 
     public boolean isConfigured() {
-        return lines.values().stream().anyMatch(LineTimetable::hasAnyPeriods);
+        return lines.values().stream().anyMatch(LineTimetable::hasAnyPeriods)
+                || exceptions.stream().anyMatch(e -> e.kind() == ScheduleException.Kind.SPECIAL_HOURS && !e.periods().isEmpty());
+    }
+
+    /** The exceptions in force on {@code serviceDay} for {@code lineCode}, in configured order. */
+    public List<ScheduleException> exceptionsFor(LocalDate serviceDay, String lineCode) {
+        return exceptions.stream().filter(e -> e.date().equals(serviceDay) && e.appliesTo(lineCode)).toList();
+    }
+
+    /**
+     * A date-specific override. {@code lineCodes} empty means every line.
+     *
+     * <ul>
+     *   <li>{@code CLOSED} — no service at all that day.</li>
+     *   <li>{@code SPECIAL_HOURS} — {@code periods} replace the regular timetable that day.</li>
+     *   <li>{@code RUN_AS} — the day runs the {@code runAs} day type's timetable (e.g. a festival
+     *       weekday on Sunday hours).</li>
+     * </ul>
+     * {@code note} is shown to the operator (e.g. "Ugadi: services from 07:00").
+     */
+    public record ScheduleException(
+            LocalDate date,
+            Set<String> lineCodes,
+            Kind kind,
+            DayType runAs,
+            List<ServicePeriod> periods,
+            String note
+    ) {
+
+        public ScheduleException {
+            lineCodes = lineCodes == null ? Set.of() : Set.copyOf(lineCodes);
+            periods = periods == null ? List.of() : List.copyOf(periods);
+            if (kind == Kind.RUN_AS && runAs == null) {
+                throw new IllegalArgumentException("A RUN_AS exception on " + date + " needs a day type to run as");
+            }
+            if (kind == Kind.SPECIAL_HOURS && periods.isEmpty()) {
+                throw new IllegalArgumentException("A SPECIAL_HOURS exception on " + date + " needs periods");
+            }
+        }
+
+        public boolean appliesTo(String lineCode) {
+            return lineCodes.isEmpty() || lineCodes.contains(lineCode);
+        }
+
+        public enum Kind {
+            CLOSED,
+            SPECIAL_HOURS,
+            RUN_AS
+        }
     }
 
     public enum DayType {

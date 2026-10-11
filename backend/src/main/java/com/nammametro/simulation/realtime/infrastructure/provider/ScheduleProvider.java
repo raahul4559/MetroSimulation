@@ -106,7 +106,6 @@ public class ScheduleProvider implements MetroRealtimeProvider {
     public ProviderSnapshot fetchSnapshot(Instant now) {
         LocalDate serviceDay = calendar.serviceDay(now);
         long secondsIntoDay = MetroTime.secondsIntoServiceDay(now, serviceDay);
-        var dayType = calendar.dayType(serviceDay);
 
         List<VehiclePosition> positions = new ArrayList<>();
         List<TripUpdate> updates = new ArrayList<>();
@@ -115,7 +114,8 @@ public class ScheduleProvider implements MetroRealtimeProvider {
             if (byDirection == null) {
                 continue; // a timetabled line this network doesn't model
             }
-            List<Integer> departures = calendar.departures(lineCode, dayType);
+            // Exceptions applied: a closed day has no departures, special hours replace the regular ones.
+            List<Integer> departures = calendar.scheduleFor(lineCode, serviceDay).departures();
             for (RouteTimings timings : byDirection.values()) {
                 if (timings.stops().size() < 2) {
                     continue;

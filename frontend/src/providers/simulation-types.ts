@@ -8,7 +8,7 @@ import type {
   SimulationClock,
   TrainState,
 } from "@/domain/trainsim";
-import type { LineStatus, MetroStateFrame, ProviderHealth, RealtimeAlert } from "@/domain/realtime";
+import type { MetroStateFrame, ProviderHealth, RealtimeAlert, ServiceStatus } from "@/domain/realtime";
 import type { ConnectionStatus } from "@/lib/ws/realtime-socket";
 import type { FeedProvenance } from "@/lib/realtime/provenance";
 
@@ -40,7 +40,9 @@ export interface SimulationDataValue {
   /** Trains are in service: a running simulation, or any line operating / any train reported. */
   readonly serviceRunning: boolean;
   readonly trains: readonly TrainState[];
-  readonly lineStatuses: readonly LineStatus[];
+  /** Namma Metro's operating status (IST timetable + alerts + observed trains); null before the
+   * first frame. Independent of which source the trains on screen come from. */
+  readonly service: ServiceStatus | null;
   readonly alerts: readonly RealtimeAlert[];
   readonly providers: readonly ProviderHealth[];
   readonly signals: readonly Signal[];
