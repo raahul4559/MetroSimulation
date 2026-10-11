@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SimulationProvider } from "@/providers/SimulationProvider";
+import { RealtimeStatusBar } from "@/components/realtime/RealtimeStatusBar";
 
 /**
  * Everything that needs the live simulation feed.
@@ -14,8 +15,14 @@ import { SimulationProvider } from "@/providers/SimulationProvider";
  * is created here and handed to `SimulationProvider`, it is referentially stable across the
  * provider's re-renders — and the provider re-renders on every WebSocket frame. Rewriting this to
  * call the hooks inline and render the tree directly would re-render the entire page sixty times a
- * minute instead of only the components that subscribe.
+ * minute instead of only the components that subscribe. The status bar is created here for the
+ * same reason: it subscribes to the frame itself, so only it re-renders when the clock ticks.
  */
 export default function LiveLayout({ children }: { children: ReactNode }) {
-  return <SimulationProvider>{children}</SimulationProvider>;
+  return (
+    <SimulationProvider>
+      <RealtimeStatusBar />
+      {children}
+    </SimulationProvider>
+  );
 }

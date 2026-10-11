@@ -138,7 +138,7 @@ export function SimulationProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const { frame, connectionStatus, stalled } = realtime;
+  const { frame, connectionStatus, stalled, reconnectCount, lastFrameReceivedAtMs } = realtime;
 
   /*
    * The one animation system for trains (see `lib/realtime/trainMotion`). Fed every canonical frame
@@ -161,6 +161,9 @@ export function SimulationProvider({ children }: PropsWithChildren) {
     return {
       state: frame,
       connectionStatus,
+      stalled,
+      reconnectCount,
+      lastFrameReceivedAtMs,
       feed: describeFeed(frame, connectionStatus, stalled),
       isSimulationSource: frame?.activeSource === "SIMULATION",
       clock,
@@ -184,7 +187,7 @@ export function SimulationProvider({ children }: PropsWithChildren) {
       disruptions: extras?.disruptions ?? [],
       passengerMetrics: extras?.passengerMetrics ?? EMPTY_PASSENGER_METRICS,
     };
-  }, [frame, connectionStatus, stalled]);
+  }, [frame, connectionStatus, stalled, reconnectCount, lastFrameReceivedAtMs]);
 
   const actions = useMemo<SimulationActionsValue>(
     () => ({

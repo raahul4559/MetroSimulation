@@ -7,7 +7,7 @@ import type { Disruption, Passenger, TrainState } from "@/domain/trainsim";
 import type { RealtimeAlert } from "@/domain/realtime";
 import type { CameraMode3D } from "@/domain/station3d";
 import { buildStationLayout3D } from "@/lib/station3d/layout";
-import { findUpcomingTrainCode, selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
+import { selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
 import { buildPlatformDestinations } from "@/lib/station3d/interchangeSignage";
 import { atmosphereFor } from "@/lib/station3d/atmosphere";
 import { getStationConfig } from "@/config/stations/stationConfigs";
@@ -35,8 +35,6 @@ interface StationSceneProps {
   disruptions?: readonly Disruption[];
   /** The canonical frame's active realtime alerts — announced when one first appears. */
   alerts?: readonly RealtimeAlert[];
-  /** HH:MM:SS of the state on screen — simulated time, or server time in IST. */
-  clockTime: string;
   onBack: () => void;
   /**
    * Fired once the canvas has actually drawn its first frames for this station — the signal a
@@ -69,7 +67,6 @@ export function StationScene({
   passengers,
   disruptions = NO_DISRUPTIONS,
   alerts = NO_ALERTS,
-  clockTime,
   onBack,
   onReady,
   chromeHidden = false,
@@ -186,21 +183,6 @@ export function StationScene({
   const selectedTrain = trainVisuals.find((t) => t.trainId === selectedTrainId) ?? trainVisuals[0] ?? null;
   const selectedPlatform = selectedTrain ? layout.platforms.find((p) => p.lineCode === selectedTrain.lineCode) : layout.platforms[0];
 
-  const nextTrainCode = selectedTrain
-    ? findUpcomingTrainCode(trains, station.id, selectedTrain.lineCode, selectedTrain.direction, selectedTrain.trainId)
-    : null;
-
-  // Real-time boarding/alighting headcounts for whichever train is selected and currently
-  // dwelling — read straight off the shared passenger roster, not tracked separately.
-  const boardingCount =
-    selectedTrain?.phase === "BOARDING"
-      ? passengers.filter((p) => p.status === "BOARDING" && p.currentTrainId === selectedTrain.trainId).length
-      : 0;
-  const alightingCount =
-    selectedTrain?.phase === "BOARDING"
-      ? passengers.filter((p) => p.status === "ALIGHTING" && p.currentStationId === station.id).length
-      : 0;
-
   return (
     <div
       className="relative h-full w-full overflow-hidden bg-canvas"
@@ -237,12 +219,6 @@ export function StationScene({
         station={station}
         config={config}
         quality={asset.quality}
-        platformLabel={
-          selectedPlatform
-            ? `Platform ${selectedPlatform.platformNumber} · ${selectedPlatform.lineName}`
-            : null
-        }
-        clockTime={clockTime}
         cameraMode={cameraMode}
         onCameraModeChange={setCameraMode}
         onResetCamera={() => setResetToken((t) => t + 1)}
@@ -254,9 +230,6 @@ export function StationScene({
         trains={trainVisuals}
         selectedTrainId={selectedTrainId}
         onSelectTrain={setSelectedTrainId}
-        nextTrainCode={nextTrainCode}
-        boardingCount={boardingCount}
-        alightingCount={alightingCount}
         hidden={chromeHidden}
       />
     </div>

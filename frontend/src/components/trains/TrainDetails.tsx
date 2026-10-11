@@ -16,6 +16,9 @@ import {
 import { formatAge, trainSourceLabel } from "@/lib/realtime/provenance";
 import { formatIstTimeOfDay } from "@/lib/realtime/serverClock";
 import { computeBlockChain } from "@/lib/metro/blockChain";
+import { describeTrainDataState } from "@/lib/realtime/dataState";
+import { useDataState } from "@/hooks/useDataState";
+import { DataStateBadge } from "@/components/realtime/DataStateBadge";
 
 interface TrainDetailsProps {
   train: TrainState | null;
@@ -39,6 +42,7 @@ const ASPECT_TONE = {
  * location description above it. */
 export function TrainDetails({ train, lines, stations, tracks, signals, serverNowMs }: TrainDetailsProps) {
   const [debugMode, setDebugMode] = useState(false);
+  const { network, nowMs } = useDataState();
 
   if (!train) {
     return <p className="text-xs text-muted">Select a train to see its details.</p>;
@@ -70,6 +74,8 @@ export function TrainDetails({ train, lines, stations, tracks, signals, serverNo
         </div>
         <StatusBadge label={TRAIN_STATUS_LABEL[train.status]} tone={TRAIN_STATUS_TONE[train.status]} />
       </div>
+
+      <DataStateBadge state={network ? describeTrainDataState(train, network, nowMs) : null} />
 
       <p className="text-xs text-secondary">{describeTrainLocation(train, stationsById)}</p>
 

@@ -24,7 +24,8 @@ export const DEFAULT_MAP_PREFERENCES: MapPreferences = {
   labelsVisible: true,
   signalsVisible: false,
   densityVisible: true,
-  diagnosticsVisible: false,
+  // On by default while developing; an operator turns it on from Settings.
+  diagnosticsVisible: process.env.NODE_ENV !== "production",
 };
 
 const STORAGE_KEY = "namma-metro.map-preferences";

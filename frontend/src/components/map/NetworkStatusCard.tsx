@@ -4,7 +4,9 @@ import type { Disruption, TrainState } from "@/domain/trainsim";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { Surface } from "@/components/ui/Surface";
 import type { Tone } from "@/lib/ui/tone";
-import { isLate } from "@/lib/metro/trainDisplay";
+import { delayStats, isLate } from "@/lib/metro/trainDisplay";
+import { useDataState } from "@/hooks/useDataState";
+import { DataStateBadge } from "@/components/realtime/DataStateBadge";
 
 interface NetworkStatusCardProps {
   stationCount: number;
@@ -42,6 +44,10 @@ function serviceState(
   }
 
   const running = trains.filter((t) => t.status !== "SCHEDULED" && t.status !== "COMPLETED");
+  // A source that reports no delays (a timetable estimate) can't say service is normal.
+  if (running.length > 0 && delayStats(running).knownCount === 0) {
+    return { label: "Delays not reported", tone: "neutral" };
+  }
   const delayed = running.filter(isLate);
   // A tenth of the fleet running late is the point at which "normal service" stops being true.
   if (running.length > 0 && delayed.length / running.length > 0.1) {
@@ -59,9 +65,10 @@ export function NetworkStatusCard({
 }: NetworkStatusCardProps) {
   const running = trains.filter((t) => t.status !== "SCHEDULED" && t.status !== "COMPLETED");
   const service = serviceState(trains, disruptions, isRunning);
+  const { network } = useDataState();
 
   return (
-    <Surface variant="overlay" padding="none" className="pointer-events-auto w-[180px] px-3 py-2.5">
+    <Surface variant="overlay" padding="none" className="pointer-events-auto w-[200px] px-3 py-2.5">
       <h2 className="text-[10px] font-medium uppercase tracking-wider text-muted">Network status</h2>
       <ul className="mt-2 space-y-1.5">
         <li>
@@ -77,6 +84,9 @@ export function NetworkStatusCard({
           <StatusIndicator label={service.label} tone={service.tone} pulse={service.tone === "danger"} />
         </li>
       </ul>
+      <div className="mt-2.5 border-t border-divider pt-2">
+        <DataStateBadge state={network} />
+      </div>
     </Surface>
   );
 }

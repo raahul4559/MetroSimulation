@@ -27,6 +27,9 @@ import { delayStats } from "@/lib/metro/trainDisplay";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { RealtimeDiagnostics } from "@/components/realtime/RealtimeDiagnostics";
 import { ServiceStatusCard } from "@/components/realtime/ServiceStatusCard";
+import { DataStateBadge } from "@/components/realtime/DataStateBadge";
+import { useDataState } from "@/hooks/useDataState";
+import { delayDataState, simulationOnlyDataState } from "@/lib/realtime/dataState";
 
 /**
  * The operations dashboard.
@@ -41,13 +44,14 @@ import { ServiceStatusCard } from "@/components/realtime/ServiceStatusCard";
  */
 export default function OperationsPage() {
   const { lines, stations, tracks } = useNetworkData();
-  const { state, trains, signals, passengers, disruptions, passengerMetrics, clock, feed, isSimulationSource } =
+  const { state, trains, signals, passengers, disruptions, passengerMetrics, clock, isSimulationSource } =
     useSimulationData();
   const { hiddenLineCodes, toggleLine } = useLineVisibilityContext();
   const { selectedTrainId, selectTrain } = useTrainSelection();
   const simActions = useSimulationActions();
   const disruptionActions = useDisruptionActions();
   const { push } = useToast();
+  const { network } = useDataState();
 
   useEffect(() => {
     if (!disruptionActions.error) return;
@@ -73,6 +77,15 @@ export default function OperationsPage() {
   ).length;
   const activeDisruptions = disruptions.filter((d) => d.status === "ACTIVE");
 
+  // Each panel says what its numbers are based on. Passengers and injected disruptions exist only
+  // in the simulation; delays only where the source reports them.
+  const trainsBadge = <DataStateBadge state={network} layout="compact" />;
+  const passengerState = network ? simulationOnlyDataState(network, isSimulationSource) : null;
+  const passengerBadge = <DataStateBadge state={passengerState} layout="compact" />;
+  const delayBadge = (
+    <DataStateBadge state={network ? delayDataState(network, delays.knownCount, running.length) : null} layout="compact" />
+  );
+
   return (
     <main className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 p-4 md:p-6">
       <header className="flex flex-wrap items-baseline justify-between gap-3">
@@ -82,17 +95,15 @@ export default function OperationsPage() {
             Everything currently happening on the network, from the active data source.
           </p>
         </div>
-        {isSimulationSource ? (
-          <StatusIndicator
-            label={clock.status === "RUNNING" ? "Simulation running" : `Simulation ${clock.status.toLowerCase()}`}
-            tone={clock.status === "RUNNING" ? "positive" : "neutral"}
-            size="md"
-          />
-        ) : (
-          <span title={feed.detail}>
-            <StatusIndicator label={feed.label} tone={feed.tone} size="md" />
-          </span>
-        )}
+        <div className="flex items-center gap-4">
+          {isSimulationSource && (
+            <StatusIndicator
+              label={clock.status === "RUNNING" ? "Simulation running" : `Simulation ${clock.status.toLowerCase()}`}
+              tone={clock.status === "RUNNING" ? "positive" : "neutral"}
+            />
+          )}
+          <DataStateBadge state={network} layout="inline" />
+        </div>
       </header>
 
       {/* Network status — a compact row, not six oversized cards. */}
@@ -109,14 +120,16 @@ export default function OperationsPage() {
           />
           <Metric
             label="Avg delay"
-            value={avgDelay > 0 ? formatDurationSeconds(avgDelay) : "None"}
+            value={delays.knownCount === 0 ? "—" : avgDelay > 0 ? formatDurationSeconds(avgDelay) : "None"}
             tone={avgDelay > 0 ? "warning" : "neutral"}
           />
-          <Metric label="Waiting" value={waitingNow.toLocaleString()} />
-          <Metric label="On trains" value={onTrainNow.toLocaleString()} />
+          {/* Only the simulation models passengers and injected disruptions; elsewhere "0" would be
+              invented, so these read "—". */}
+          <Metric label="Waiting" value={isSimulationSource ? waitingNow.toLocaleString() : "—"} />
+          <Metric label="On trains" value={isSimulationSource ? onTrainNow.toLocaleString() : "—"} />
           <Metric
             label="Active disruptions"
-            value={activeDisruptions.length}
+            value={isSimulationSource ? activeDisruptions.length : "—"}
             tone={activeDisruptions.length > 0 ? "danger" : "neutral"}
           />
         </div>
@@ -127,6 +140,7 @@ export default function OperationsPage() {
           <Panel
             title="Active trains"
             description="Select a train to see its detail and focus it on the network map."
+            action={trainsBadge}
           >
             <TrainList
               trains={trains}
@@ -139,16 +153,16 @@ export default function OperationsPage() {
             />
           </Panel>
 
-          <Panel title="Headway" description="Observed spacing between consecutive trains.">
+          <Panel title="Headway" description="Spacing between consecutive trains." action={trainsBadge}>
             <HeadwayPanel trains={trains} lines={lines} tracks={tracks} />
           </Panel>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Panel title="Station congestion" description="Passengers waiting, busiest first.">
+            <Panel title="Station congestion" description="Passengers waiting, busiest first." action={passengerBadge}>
               <StationCongestionPanel passengers={passengers} stations={stations} />
             </Panel>
 
-            <Panel title="Passenger demand">
+            <Panel title="Passenger demand" action={passengerBadge}>
               <PassengerMetricsPanel
                 metrics={passengerMetrics}
                 waitingNow={waitingNow}
@@ -157,7 +171,7 @@ export default function OperationsPage() {
             </Panel>
           </div>
 
-          <Panel title="Delays">
+          <Panel title="Delays" action={delayBadge}>
             <DelayAnalyticsPanel trains={trains} columns={5} />
           </Panel>
         </div>
@@ -196,7 +210,7 @@ export default function OperationsPage() {
             />
           </Panel>
 
-          <Panel title="Service disruptions">
+          <Panel title="Service disruptions" action={passengerBadge}>
             <ActiveDisruptionsList
               disruptions={disruptions}
               elapsedSeconds={clock.elapsedSimulationSeconds}

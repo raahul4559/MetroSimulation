@@ -65,7 +65,7 @@ const StationImmersionScene = dynamic(
  */
 export function NetworkStage() {
   const { lines, stations, tracks, isLoading, error } = useNetworkData();
-  const { state, trains, signals, passengers, disruptions, alerts, timeOfDay, serviceRunning } = useSimulationData();
+  const { state, trains, signals, passengers, disruptions, alerts, serviceRunning } = useSimulationData();
   const [preferences] = useMapPreferences();
   const { hiddenLineCodes, toggleLine } = useLineVisibilityContext();
   const { selectedTrainId, selectedStationId, focusToken, selectTrain, selectStation } =
@@ -183,7 +183,6 @@ export function NetworkStage() {
           passengers={passengers}
           disruptions={disruptions}
           alerts={alerts}
-          clockTime={timeOfDay}
           phase={immersion.phase}
           sceneReady={sceneReady}
           onSceneReady={onSceneReady}
@@ -203,18 +202,23 @@ export function NetworkStage() {
       */}
       {/* Namma Metro's operating status, top-left — the map's zoom controls hold the top-right. */}
       {immersion.phase === "map" && (
-        <div className="pointer-events-none absolute left-3 top-3 sm:left-4 sm:top-4">
+        <div className="pointer-events-none absolute left-4 top-4 hidden sm:block">
           <ServiceStatusCard />
+        </div>
+      )}
+
+      {/* Development diagnostics, bottom-right — clear of the dock, which centres along the bottom
+          and reaches this corner below `lg`. */}
+      {immersion.phase === "map" && preferences.diagnosticsVisible && (
+        <div className="pointer-events-none absolute bottom-24 right-4 hidden sm:block lg:bottom-4">
+          <Surface variant="overlay" padding="sm" className="pointer-events-auto w-64">
+            <RealtimeDiagnostics variant="overlay" />
+          </Surface>
         </div>
       )}
 
       {immersion.phase === "map" && (
         <div className="pointer-events-none absolute bottom-3 left-3 hidden flex-col gap-2 sm:flex sm:bottom-4 sm:left-4">
-          {preferences.diagnosticsVisible && (
-            <Surface variant="overlay" padding="sm" className="pointer-events-auto w-64">
-              <RealtimeDiagnostics variant="overlay" />
-            </Surface>
-          )}
           <MapLegend lines={lines} hiddenLineCodes={hiddenLineCodes} onToggleLine={toggleLine} />
           <NetworkStatusCard
             stationCount={stations.length}

@@ -7,7 +7,6 @@ import { Menu, X } from "lucide-react";
 import { NAV_ITEMS, isActiveRoute } from "@/lib/nav/routes";
 import { cn } from "@/lib/ui/cn";
 import { IconButton } from "@/components/ui/IconButton";
-import { NavConnectionBadge } from "./NavConnectionBadge";
 import { SearchCommand } from "./SearchCommand";
 import { SettingsMenu } from "./SettingsMenu";
 
@@ -56,9 +55,6 @@ export function Navbar() {
 
         <div className="ml-auto flex items-center gap-2">
           <SearchCommand />
-          <div className="hidden sm:block">
-            <NavConnectionBadge />
-          </div>
           <SettingsMenu />
           <div className="md:hidden">
             <IconButton
@@ -99,9 +95,6 @@ export function Navbar() {
               );
             })}
           </ul>
-          <div className="mt-3 border-t border-divider px-2.5 pt-3 sm:hidden">
-            <NavConnectionBadge />
-          </div>
         </nav>
       )}
     </header>

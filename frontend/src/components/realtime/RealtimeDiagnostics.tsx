@@ -46,7 +46,7 @@ const AGE_WARNING_MS = 30_000;
  * version shown over the map when "Data diagnostics" is on.
  */
 export function RealtimeDiagnostics({ variant = "panel" }: { variant?: "panel" | "overlay" }) {
-  const { state, feed, connectionStatus } = useSimulationData();
+  const { state, feed, connectionStatus, reconnectCount } = useSimulationData();
   const now = useRealDateTime().getTime();
 
   if (!state) {
@@ -70,6 +70,13 @@ export function RealtimeDiagnostics({ variant = "panel" }: { variant?: "panel" |
     ["Trains", String(d.trainCount)],
     ["Fresh positions", d.estimatedCount > 0 ? `${d.freshCount} (${d.estimatedCount} interpolated)` : String(d.freshCount)],
     ["Stale positions", d.staleCount > 0 ? `${d.staleCount} (estimated)` : "0", d.staleCount > 0 ? "warning" : undefined],
+    [
+      "Mode",
+      state.requestedMode === state.activeSource ? state.activeSource : `${state.requestedMode} → ${state.activeSource}`,
+    ],
+    ["Frame", <span key="f" title={state.instanceId}>#{state.version} · {state.instanceId.slice(0, 8)}</span>],
+    ["Reconnects", String(reconnectCount), reconnectCount > 0 ? "warning" : undefined],
+    ["Clock offset", isServerClockSynced() ? formatOffset(serverClockOffsetMs()) : "not synced"],
     [
       "Connection",
       `${CONNECTION_LABEL[connectionStatus]}${d.frameAgeMs > 3_000 ? ` · no frame for ${formatAge(d.frameAgeMs)}` : ""}`,
@@ -122,15 +129,13 @@ export function RealtimeDiagnostics({ variant = "panel" }: { variant?: "panel" |
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-muted">
-        Server time {formatIstTimeOfDay(now)} IST
-        {isServerClockSynced() && ` · this browser's clock is ${formatOffset(serverClockOffsetMs())}`}
-      </p>
+      <p className="text-[11px] text-muted">Server time {formatIstTimeOfDay(now)} IST</p>
     </div>
   );
 }
 
+/** How this browser's clock compares with the server's. */
 function formatOffset(offsetMs: number): string {
   if (Math.abs(offsetMs) < 500) return "in sync";
-  return `${formatAge(Math.abs(offsetMs))} ${offsetMs > 0 ? "behind" : "ahead"}`;
+  return `browser ${formatAge(Math.abs(offsetMs))} ${offsetMs > 0 ? "behind" : "ahead"}`;
 }

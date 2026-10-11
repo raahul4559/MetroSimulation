@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeft, FileText, Volume2, VolumeX } from "lucide-react";
 import type { Station } from "@/domain/metro";
 import type { CameraMode3D, PlatformLayout3D, TrainVisual3D } from "@/domain/station3d";
@@ -8,17 +8,22 @@ import type { StationConfig, StationModelQuality } from "@/domain/stationConfig"
 import type { StationVisualReference } from "@/domain/stationVisualReference";
 import type { AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
 import { cn } from "@/lib/ui/cn";
-import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
-import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { Surface } from "@/components/ui/Surface";
 import { useAudioSettings } from "@/hooks/useAudioSettings";
+import { useDataState } from "@/hooks/useDataState";
+import { useMapPreferences } from "@/hooks/useMapPreferences";
 import { AudioSettingsControls } from "@/components/layout/AudioSettingsControls";
-import { useSimulationData } from "@/providers/SimulationProvider";
+import { DataStateBadge } from "@/components/realtime/DataStateBadge";
+import { RealtimeDiagnostics } from "@/components/realtime/RealtimeDiagnostics";
+import { useNetworkData, useSimulationData } from "@/providers/SimulationProvider";
+import { getStationArrivals } from "@/lib/metro/stationArrivals";
+import { describeTrainDataState } from "@/lib/realtime/dataState";
+import { lineVividColor } from "@/lib/ui/lineColor";
 import { AnnouncementIndicator } from "./AnnouncementIndicator";
 import { CameraControls } from "./CameraControls";
 import { ReferencePanel } from "./ReferencePanel";
-import { TrainInfoBar } from "./TrainInfoBar";
+import { TrainInfoCard } from "./TrainInfoCard";
 
 const QUALITY_LABEL: Record<StationModelQuality, string> = {
   HIGH: "High fidelity",
@@ -30,8 +35,6 @@ interface Station3DOverlayProps {
   station: Station;
   config: StationConfig;
   quality: StationModelQuality;
-  platformLabel: string | null;
-  clockTime: string;
   cameraMode: CameraMode3D;
   onCameraModeChange: (mode: CameraMode3D) => void;
   onResetCamera: () => void;
@@ -43,9 +46,6 @@ interface Station3DOverlayProps {
   trains: readonly TrainVisual3D[];
   selectedTrainId: number | null;
   onSelectTrain: (id: number) => void;
-  nextTrainCode: string | null;
-  boardingCount: number;
-  alightingCount: number;
   /** Suppresses the whole overlay while a transition covers the scene. */
   hidden?: boolean;
 }
@@ -57,8 +57,9 @@ interface Station3DOverlayProps {
  * with the WebGL scene, the announcement lifecycle and the audio lifecycle sharing the file. The
  * scene component now owns behaviour; this owns presentation.
  *
- * The layout follows the brief's shape: identity and exit top-left, utilities top-right, camera on
- * the right rail, train information along the bottom, captions floating above it. Everything is
+ * Minimal on purpose — the station is the content. Identity, exit and the data state top-left;
+ * utilities top-right; camera on the right rail; one small train card bottom-left; captions
+ * bottom-centre. The IST clock and service status stay visible in the status bar above. Everything is
  * `pointer-events-none` at the container level with `pointer-events-auto` on the interactive
  * children, so the operator can still orbit the scene by dragging anywhere between the controls.
  */
@@ -66,8 +67,6 @@ export function Station3DOverlay({
   station,
   config,
   quality,
-  platformLabel,
-  clockTime,
   cameraMode,
   onCameraModeChange,
   onResetCamera,
@@ -79,16 +78,24 @@ export function Station3DOverlay({
   trains,
   selectedTrainId,
   onSelectTrain,
-  nextTrainCode,
-  boardingCount,
-  alightingCount,
   hidden = false,
 }: Station3DOverlayProps) {
-  // Server-derived provenance: "Live" only for a fresh observed feed, never for the simulation.
-  const { feed } = useSimulationData();
+  // Server-derived: LIVE only for a fresh observed feed still reaching this browser.
+  const { network, nowMs } = useDataState();
+  const { trains: canonicalTrains, state } = useSimulationData();
+  const { lines, tracks } = useNetworkData();
+  const [preferences] = useMapPreferences();
   const [audioOpen, setAudioOpen] = useState(false);
   const [referenceOpen, setReferenceOpen] = useState(false);
   const [audioSettings] = useAudioSettings();
+
+  const servingLines = useMemo(() => lines.filter((l) => station.lines.includes(l.code)), [lines, station.lines]);
+  // The ETA and data state come from the canonical train, the same object the 2D map reads.
+  const canonicalTrain = train ? canonicalTrains.find((t) => t.id === train.trainId) ?? null : null;
+  const arrival = canonicalTrain
+    ? (getStationArrivals(station, [canonicalTrain], tracks, lines, state?.serverEpochMillis)[0] ?? null)
+    : null;
+  const trainDataState = network && canonicalTrain ? describeTrainDataState(canonicalTrain, network, nowMs) : network;
 
   return (
     <div
@@ -99,36 +106,38 @@ export function Station3DOverlay({
       aria-hidden={hidden}
       inert={hidden}
     >
-      {/* Identity + exit */}
-      <div className="absolute left-3 top-3 flex max-w-[min(22rem,60vw)] flex-col gap-2 sm:left-4 sm:top-4">
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<ArrowLeft size={14} />}
-          onClick={onBack}
-          className="pointer-events-auto w-fit bg-surface/80 backdrop-blur-xl"
-        >
-          Back to Network
-        </Button>
-
-        <Surface variant="overlay" padding="none" className="pointer-events-auto px-3.5 py-2.5">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="truncate text-base font-semibold tracking-tight text-content">
-              {station.name}
-            </h2>
-            <span className="tabular shrink-0 font-mono text-[11px] text-muted">{clockTime}</span>
-          </div>
-          {platformLabel && <p className="mt-0.5 truncate text-[11px] text-secondary">{platformLabel}</p>}
-          <div className="mt-2 flex items-center gap-2">
-            <span title={feed.detail}>
-              <StatusIndicator label={feed.label} tone={feed.tone} />
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-muted">
-              {config.buildType.replace("_", " ")}
-              {config.isInterchange ? " · Interchange" : ""}
-            </span>
+      {/* Identity, exit and data state */}
+      <div className="absolute left-3 top-3 flex max-w-[min(20rem,60vw)] flex-col sm:left-4 sm:top-4">
+        <Surface variant="overlay" padding="none" className="pointer-events-auto px-3.5 py-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="-ml-1 flex items-center gap-1 rounded px-1 text-xs text-secondary transition-colors duration-(--duration-fast) hover:text-content"
+          >
+            <ArrowLeft size={13} aria-hidden />
+            Network
+          </button>
+          <h2 className="mt-2 truncate text-lg font-semibold uppercase tracking-[0.06em] text-content">
+            {station.name}
+          </h2>
+          <p className="mt-0.5 truncate text-xs">
+            {servingLines.map((line, i) => (
+              <span key={line.code}>
+                {i > 0 && <span className="text-muted"> + </span>}
+                <span style={{ color: lineVividColor(line) }}>{line.name.replace(/ Line$/, "")}</span>
+              </span>
+            ))}
+            {config.isInterchange && <span className="text-muted"> · Interchange</span>}
+          </p>
+          <div className="mt-2.5">
+            <DataStateBadge state={network} />
           </div>
         </Surface>
+        {preferences.diagnosticsVisible && (
+          <Surface variant="overlay" padding="sm" className="pointer-events-auto mt-2 w-64">
+            <RealtimeDiagnostics variant="overlay" />
+          </Surface>
+        )}
       </div>
 
       {/* Utilities */}
@@ -179,24 +188,30 @@ export function Station3DOverlay({
         <CameraControls mode={cameraMode} onModeChange={onCameraModeChange} onReset={onResetCamera} />
       </div>
 
-      {/* Caption + train bar */}
-      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-3 sm:p-4">
-        {caption && <AnnouncementIndicator caption={caption} />}
-        <TrainInfoBar
+      {/* Train card, bottom-left */}
+      <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4">
+        <TrainInfoCard
           train={train}
           platform={platform}
-          nextTrainCode={nextTrainCode}
-          boardingCount={boardingCount}
-          alightingCount={alightingCount}
+          arrival={arrival}
+          dataState={trainDataState}
           trains={trains}
           selectedTrainId={selectedTrainId}
           onSelectTrain={onSelectTrain}
         />
       </div>
 
+      {/* Announcement caption, bottom-centre — clear of the train card on wide screens, above it on
+          narrow ones. */}
+      {caption && (
+        <div className="absolute inset-x-0 bottom-48 flex justify-center px-3 md:bottom-4 md:left-80">
+          <AnnouncementIndicator caption={caption} />
+        </div>
+      )}
+
       {/* Fidelity disclosure. Small and out of the way, but never hidden — the geometry is an
           approximation and the interface says so rather than implying a survey-accurate model. */}
-      <span className="pointer-events-none absolute bottom-3 left-3 hidden text-[10px] uppercase tracking-wider text-muted lg:block">
+      <span className="pointer-events-none absolute bottom-3 right-3 hidden text-[10px] uppercase tracking-wider text-muted lg:block">
         {QUALITY_LABEL[quality]}
       </span>
     </div>

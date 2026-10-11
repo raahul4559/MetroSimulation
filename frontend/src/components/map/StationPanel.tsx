@@ -21,6 +21,11 @@ import { Button } from "@/components/ui/Button";
 import { LineBadge } from "@/components/ui/LineBadge";
 import { Metric } from "@/components/ui/Metric";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { DataStateBadge } from "@/components/realtime/DataStateBadge";
+import { useOptionalSimulationData } from "@/providers/SimulationProvider";
+import { useDataState } from "@/hooks/useDataState";
+import { deriveStationStatus } from "@/lib/realtime/stationStatus";
+import { simulationOnlyDataState } from "@/lib/realtime/dataState";
 
 interface StationPanelProps {
   station: Station;
@@ -61,8 +66,9 @@ const TYPE_LABEL: Record<Station["stationType"], string> = {
  * weighted sections (lines, nearby stations, current trains, queue, data feed) which meant the
  * single most time-sensitive fact — the next train — was three sections down.
  *
- * Reads only from props; arrivals and platform numbers are derived in `lib/metro/stationArrivals`,
- * not computed here.
+ * Arrivals and platform numbers come from props (derived in `lib/metro/stationArrivals`). The
+ * station's status and the data badges read the canonical frame directly, through the optional
+ * hooks — the status is the server's (timetable, alerts, disruptions), never assumed.
  */
 export function StationPanel({
   station,
@@ -85,6 +91,11 @@ export function StationPanel({
   const avgDelay =
     arrivalDelays.knownCount > 0 ? Math.round(arrivalDelays.totalDelaySeconds / arrivalDelays.knownCount) : 0;
 
+  const sim = useOptionalSimulationData();
+  const { network } = useDataState();
+  const status = deriveStationStatus(station, sim?.service ?? null, sim?.alerts ?? [], sim?.disruptions ?? []);
+  const passengerState = network ? simulationOnlyDataState(network, sim?.isSimulationSource ?? false) : null;
+
   return (
     <BottomSheet
       open
@@ -106,13 +117,15 @@ export function StationPanel({
       }
     >
       <div className="flex items-center justify-between gap-2 pb-4">
-        <StatusIndicator label="Operational" tone="positive" size="md" />
+        <span title={status.detail}>
+          <StatusIndicator label={status.label} tone={status.tone} size="md" />
+        </span>
         <span className="text-[11px] text-muted">
           {TYPE_LABEL[station.stationType]} · {station.code}
         </span>
       </div>
 
-      <Section title="Next train">
+      <Section title="Next train" aside={<DataStateBadge state={network} layout="compact" />}>
         {next ? (
           <div>
             <div className="flex items-baseline justify-between gap-3">
@@ -167,23 +180,31 @@ export function StationPanel({
         </Section>
       )}
 
-      <Section title="Right now">
+      <Section title="Right now" aside={<DataStateBadge state={network} layout="compact" />}>
         <div className="grid grid-cols-2 gap-x-3 gap-y-4">
           <Metric label="Platforms" value={stationLines.length} size="sm" />
           <Metric label="Incoming" value={arrivals.length} size="sm" />
-          <Metric
-            label="Passengers"
-            value={queue.length}
-            size="sm"
-            tone={DENSITY_TONE[density]}
-            sublabel={`${DENSITY_LABEL[density]} density`}
-          />
-          <Metric
-            label="Avg delay"
-            value={avgDelay > 0 ? `+${formatDurationSeconds(avgDelay)}` : "On time"}
-            size="sm"
-            tone={avgDelay > 0 ? "warning" : "neutral"}
-          />
+          {passengerState?.kind === "UNAVAILABLE" ? (
+            <Metric label="Passengers" value="—" size="sm" sublabel="Not reported" />
+          ) : (
+            <Metric
+              label="Passengers"
+              value={queue.length}
+              size="sm"
+              tone={DENSITY_TONE[density]}
+              sublabel={`${DENSITY_LABEL[density]} density`}
+            />
+          )}
+          {arrivals.length > 0 && arrivalDelays.knownCount === 0 ? (
+            <Metric label="Avg delay" value="—" size="sm" sublabel="Not reported" />
+          ) : (
+            <Metric
+              label="Avg delay"
+              value={avgDelay > 0 ? `+${formatDurationSeconds(avgDelay)}` : arrivals.length > 0 ? "On time" : "—"}
+              size="sm"
+              tone={avgDelay > 0 ? "warning" : "neutral"}
+            />
+          )}
         </div>
       </Section>
 
@@ -199,16 +220,22 @@ export function StationPanel({
 
 function Section({
   title,
+  aside,
   children,
   className,
 }: {
   title: string;
+  /** Right-aligned beside the title — the section's data state. */
+  aside?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn("border-t border-divider py-4 first-of-type:border-t-0", className)}>
-      <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted">{title}</h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[10px] font-medium uppercase tracking-wider text-muted">{title}</h3>
+        {aside}
+      </div>
       {children}
     </section>
   );

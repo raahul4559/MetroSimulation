@@ -29,6 +29,12 @@ export interface SimulationDataValue {
   /** The raw canonical frame, or null before the first one arrives. */
   readonly state: MetroStateFrame | null;
   readonly connectionStatus: ConnectionStatus;
+  /** No frame for a few seconds although the socket may claim to be open: the screen is frozen. */
+  readonly stalled: boolean;
+  /** Successful reconnects since the page loaded — diagnostics only. */
+  readonly reconnectCount: number;
+  /** When this browser last accepted a frame (local monotonic ms) — diagnostics only. */
+  readonly lastFrameReceivedAtMs: number | null;
   /** What is on screen and how much to trust it. The only basis for any "live" wording. */
   readonly feed: FeedProvenance;
   /** True while the simulation is the active source — its controls and extras only apply then. */

@@ -15,6 +15,10 @@ export interface MetroRealtimeResult {
   /** No frame for {@link FRAME_STALL_MS}: what's on screen is frozen. */
   readonly stalled: boolean;
   readonly error: string | null;
+  /** Successful reconnects since the page loaded (the first connect doesn't count). */
+  readonly reconnectCount: number;
+  /** When this browser last accepted a frame ({@link localNowMs} clock), or null before the first. */
+  readonly lastFrameReceivedAtMs: number | null;
   /** Fetch the current state now, e.g. right after a control command. */
   readonly refresh: () => void;
 }
@@ -34,6 +38,9 @@ export function useMetroRealtime(): MetroRealtimeResult {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
   const [stalled, setStalled] = useState(false);
+  const [reconnectCount, setReconnectCount] = useState(0);
+  const [lastFrameReceivedAtMs, setLastFrameReceivedAtMs] = useState<number | null>(null);
+  const connectedOnce = useRef(false);
   const latest = useRef<MetroStateFrame | null>(null);
   const lastFrameAt = useRef(0);
 
@@ -47,6 +54,7 @@ export function useMetroRealtime(): MetroRealtimeResult {
     lastFrameAt.current = receivedAtMs;
     recordServerTime(next.serverEpochMillis, receivedAtMs);
     setFrame(next);
+    setLastFrameReceivedAtMs(receivedAtMs);
     setStalled(false);
     setError(null);
   }, []);
@@ -71,7 +79,14 @@ export function useMetroRealtime(): MetroRealtimeResult {
       onStatusChange: setConnectionStatus,
       onFrame: accept,
       // Anything published while we were disconnected is gone — re-seed rather than wait.
-      onConnected: refresh,
+      onConnected: () => {
+        if (connectedOnce.current) {
+          console.info("[realtime] Reconnected; re-seeding state");
+          setReconnectCount((n) => n + 1);
+        }
+        connectedOnce.current = true;
+        refresh();
+      },
     });
   }, [accept, refresh]);
 
@@ -86,5 +101,5 @@ export function useMetroRealtime(): MetroRealtimeResult {
     return () => window.clearInterval(interval);
   }, []);
 
-  return { frame, connectionStatus, stalled, error, refresh };
+  return { frame, connectionStatus, stalled, error, reconnectCount, lastFrameReceivedAtMs, refresh };
 }

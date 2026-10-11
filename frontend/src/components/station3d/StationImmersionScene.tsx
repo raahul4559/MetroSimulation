@@ -18,8 +18,6 @@ interface StationImmersionSceneProps {
   passengers: readonly Passenger[];
   disruptions: readonly Disruption[];
   alerts: readonly RealtimeAlert[];
-  /** HH:MM:SS of the state on screen — simulated time, or server time in IST. */
-  clockTime: string;
   phase: StationImmersionPhase;
   sceneReady: boolean;
   onSceneReady: () => void;
@@ -51,7 +49,6 @@ export function StationImmersionScene({
   passengers,
   disruptions,
   alerts,
-  clockTime,
   phase,
   sceneReady,
   onSceneReady,
@@ -94,7 +91,6 @@ export function StationImmersionScene({
             passengers={passengers}
             disruptions={disruptions}
             alerts={alerts}
-            clockTime={clockTime}
             onBack={onBack}
             onReady={onSceneReady}
             chromeHidden={phase !== "immersed"}
