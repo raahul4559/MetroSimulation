@@ -58,10 +58,13 @@ export function describeFeed(
     };
   }
   if (observed && (frame.activeSourceStale || !frame.isLive)) {
+    // Some or all trains are no longer being reported; those are dead-reckoned estimates now.
+    const staleCount = frame.trains.filter((t) => t.stale).length;
+    const all = staleCount > 0 && staleCount === frame.trains.length;
     return {
       source,
       isLive: false,
-      label: source === "LIVE" ? "Live feed stale" : "GTFS-RT stale",
+      label: `${source === "LIVE" ? "Live feed" : "GTFS-RT"} stale · ${all ? "estimated" : `${staleCount} estimated`}`,
       tone: "warning",
       detail: frame.sourceReason,
     };
@@ -78,12 +81,13 @@ export function describeFeed(
   };
 }
 
-/** A compact per-train provenance tag, e.g. "Simulated", "GTFS-RT · stale", "Scheduled". */
+/** A compact per-train provenance tag, e.g. "Simulated", "Scheduled", "GTFS-RT · estimated (stale)". */
 export function trainSourceLabel(
   train: Pick<TrainState, "source" | "stale"> & Partial<Pick<TrainState, "positionEstimated">>,
 ): string {
   const base = SOURCE_SHORT[train.source];
-  if (train.stale) return `${base} · stale`;
+  // No longer reported by its feed: the position shown is dead-reckoned from the last fix.
+  if (train.stale) return `${base} · estimated (stale)`;
   if (train.positionEstimated && (train.source === "LIVE" || train.source === "GTFS_REALTIME")) {
     return `${base} · estimated position`;
   }
@@ -94,4 +98,14 @@ export function trainSourceTone(train: Pick<TrainState, "source" | "stale">): To
   if (train.stale) return "warning";
   if (train.source === "LIVE" || train.source === "GTFS_REALTIME") return "positive";
   return train.source === "SCHEDULE" ? "info" : "neutral";
+}
+
+/** "4s", "2m 05s", "1h 03m" — the age of an observation. */
+export function formatAge(ageMs: number): string {
+  if (!Number.isFinite(ageMs)) return "—";
+  const seconds = Math.max(0, Math.round(ageMs / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }

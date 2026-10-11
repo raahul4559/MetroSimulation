@@ -16,12 +16,15 @@ export interface MapPreferences {
   readonly signalsVisible: boolean;
   /** Passenger-density halos behind station markers. */
   readonly densityVisible: boolean;
+  /** Realtime data diagnostics (source, freshness, train counts) over the map. */
+  readonly diagnosticsVisible: boolean;
 }
 
 export const DEFAULT_MAP_PREFERENCES: MapPreferences = {
   labelsVisible: true,
   signalsVisible: false,
   densityVisible: true,
+  diagnosticsVisible: false,
 };
 
 const STORAGE_KEY = "namma-metro.map-preferences";

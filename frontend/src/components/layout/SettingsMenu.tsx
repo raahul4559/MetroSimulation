@@ -76,6 +76,12 @@ export function SettingsMenu() {
             checked={preferences.signalsVisible}
             onChange={(signalsVisible) => updatePreferences({ signalsVisible })}
           />
+          <ToggleRow
+            label="Data diagnostics"
+            hint="Source, freshness and train counts"
+            checked={preferences.diagnosticsVisible}
+            onChange={(diagnosticsVisible) => updatePreferences({ diagnosticsVisible })}
+          />
 
           <div className="my-2 h-px bg-divider" />
 

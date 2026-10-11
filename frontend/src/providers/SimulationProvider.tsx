@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,6 +26,8 @@ import type {
   SimulationDataValue,
 } from "./simulation-types";
 import { describeFeed } from "@/lib/realtime/provenance";
+import { TrainMotionStore } from "@/lib/realtime/trainMotion";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { simulatedTimeOfDay } from "@/lib/metro/clockDisplay";
 import { formatIstTimeOfDay } from "@/lib/realtime/serverClock";
 
@@ -55,6 +58,8 @@ const NetworkContext = createContext<NetworkValue | null>(null);
 const LineVisibilityContext = createContext<LineVisibilityValue | null>(null);
 const DisruptionActionsContext = createContext<DisruptionActionsValue | null>(null);
 const SelectionContext = createContext<SelectionValue | null>(null);
+/** The single train-motion store. Its identity never changes; its contents change per frame. */
+const TrainMotionContext = createContext<TrainMotionStore | null>(null);
 
 /** Fallbacks for the window before the first frame, and while a non-simulation source is active. */
 const EMPTY_PASSENGER_METRICS: PassengerMetrics = {
@@ -135,6 +140,19 @@ export function SimulationProvider({ children }: PropsWithChildren) {
 
   const { frame, connectionStatus, stalled } = realtime;
 
+  /*
+   * The one animation system for trains (see `lib/realtime/trainMotion`). Fed every canonical frame
+   * here, read by the 2D map's and the 3D scene's per-display-frame loops. A layout effect so the
+   * new keyframe is in place before the browser paints the frame that rendered it.
+   */
+  const [motion] = useState(() => new TrainMotionStore());
+  const reducedMotion = usePrefersReducedMotion();
+  useLayoutEffect(() => motion.setNetwork(network.lines, network.tracks), [motion, network.lines, network.tracks]);
+  useLayoutEffect(() => motion.setReducedMotion(reducedMotion), [motion, reducedMotion]);
+  useLayoutEffect(() => {
+    if (frame) motion.ingest(frame.trains, frame.serverEpochMillis, performance.now());
+  }, [motion, frame]);
+
   const data = useMemo<SimulationDataValue>(() => {
     const extras = frame?.simulation ?? null;
     const clock = extras?.clock ?? EMPTY_CLOCK;
@@ -214,7 +232,9 @@ export function SimulationProvider({ children }: PropsWithChildren) {
         <LineVisibilityContext value={lineVisibility}>
           <DisruptionActionsContext value={disruptionActions}>
             <SelectionContext value={selection}>
-              <SimulationDataContext value={data}>{children}</SimulationDataContext>
+              <TrainMotionContext value={motion}>
+                <SimulationDataContext value={data}>{children}</SimulationDataContext>
+              </TrainMotionContext>
             </SelectionContext>
           </DisruptionActionsContext>
         </LineVisibilityContext>
@@ -248,6 +268,24 @@ export function useLineVisibilityContext(): LineVisibilityValue {
 
 export function useDisruptionActions(): DisruptionActionsValue {
   return required(useContext(DisruptionActionsContext), "useDisruptionActions");
+}
+
+/** Where each train is drawn right now — the shared motion store. See `lib/realtime/trainMotion`. */
+export function useTrainMotion(): TrainMotionStore {
+  return required(useContext(TrainMotionContext), "useTrainMotion");
+}
+
+/**
+ * Re-provides the motion store inside a separate React renderer — the 3D `<Canvas>` — which does
+ * not inherit the DOM tree's contexts reliably.
+ */
+export function TrainMotionProvider({ value, children }: PropsWithChildren<{ value: TrainMotionStore | null }>) {
+  return <TrainMotionContext value={value}>{children}</TrainMotionContext>;
+}
+
+/** Null outside the live provider; for renderers that also work standalone. */
+export function useOptionalTrainMotion(): TrainMotionStore | null {
+  return useContext(TrainMotionContext);
 }
 
 export function useTrainSelection(): SelectionValue {

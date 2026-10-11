@@ -87,7 +87,7 @@ class MetroStateManagerTest {
     }
 
     @Test
-    void aFrozenFeedGoesStaleAndAutoStopsUsingIt() {
+    void aFrozenFeedDegradesToEstimatedPositionsAndThenExpires() {
         gtfs.snapshot = new ProviderSnapshot(List.of(atB("v1", T0)), List.of(), List.of(), T0, List.of());
         MetroStateManager manager = manager(RealtimeMode.AUTO);
         manager.pollOnce(DataSource.GTFS_REALTIME);
@@ -97,10 +97,27 @@ class MetroStateManagerTest {
         manager.pollOnce(DataSource.GTFS_REALTIME);
         MetroState state = manager.publishNow();
 
-        assertThat(state.providers()).filteredOn(h -> h.source() == DataSource.GTFS_REALTIME)
-                .singleElement().extracting(ProviderHealth::status).isEqualTo(ProviderStatus.STALE);
-        assertThat(state.activeSource()).isEqualTo(DataSource.SIMULATION);
-        assertThat(state.sourceReason()).contains("GTFS-Realtime feed stale");
+        assertThat(health(state, DataSource.GTFS_REALTIME).status()).isEqualTo(ProviderStatus.STALE);
+        // Still the real (last seen) trains — not swapped for simulated ones — but labelled estimates.
+        assertThat(state.activeSource()).isEqualTo(DataSource.GTFS_REALTIME);
+        assertThat(state.activeSourceStale()).isTrue();
+        assertThat(state.sourceReason()).contains("stale").contains("estimated");
+        assertThat(MetroStateResponse.from(state).isLive()).isFalse();
+        // Last seen at B outbound; 30 s dwell + 60 s to C, so after 120 s it is estimated at C.
+        assertThat(state.trains()).singleElement().satisfies(t -> {
+            assertThat(t.stale()).isTrue();
+            assertThat(t.positionEstimated()).isTrue();
+            assertThat(t.previousStationId()).isEqualTo(3);
+            assertThat(t.nextStationId()).isEqualTo(3);
+            assertThat(t.speedKmph()).isNull();
+        });
+
+        // Past expiry the observations are dropped and AUTO falls through to what remains.
+        clock.advance(Duration.ofMinutes(5));
+        manager.pollOnce(DataSource.GTFS_REALTIME);
+        MetroState expired = manager.publishNow();
+        assertThat(health(expired, DataSource.GTFS_REALTIME).status()).isEqualTo(ProviderStatus.ERROR);
+        assertThat(expired.activeSource()).isEqualTo(DataSource.SIMULATION);
     }
 
     @Test

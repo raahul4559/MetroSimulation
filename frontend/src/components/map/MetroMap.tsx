@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { Line, Station, Track } from "@/domain/metro";
 import type { Passenger, Signal, TrainState } from "@/domain/trainsim";
 import { buildProjector } from "@/lib/geometry/projection";
@@ -15,7 +15,8 @@ import type { MapCameraMove } from "@/hooks/useStationImmersion";
 import { MetroLine } from "./MetroLine";
 import { StationMarker } from "./StationMarker";
 import { StationLabel } from "./StationLabel";
-import { TrainMarker } from "./TrainMarker";
+import { TrainMarker, trainMarkerTransform } from "./TrainMarker";
+import { useOptionalTrainMotion } from "@/providers/SimulationProvider";
 import { SignalMarker } from "./SignalMarker";
 import { MapZoomControls } from "./MapZoomControls";
 import { StationPanel } from "./StationPanel";
@@ -27,6 +28,8 @@ interface MetroMapProps {
   trains: readonly TrainState[];
   signals: readonly Signal[];
   passengers: readonly Passenger[];
+  /** The canonical frame's server time (epoch ms) — the station panel's ETA clock. */
+  serverNowMs?: number | undefined;
   hiddenLineCodes: ReadonlySet<string>;
   selectedTrainId: number | null;
   onSelectTrain: (id: number | null) => void;
@@ -70,6 +73,7 @@ export function MetroMap({
   trains,
   signals,
   passengers,
+  serverNowMs,
   hiddenLineCodes,
   selectedTrainId,
   onSelectTrain,
@@ -123,6 +127,66 @@ export function MetroMap({
   useEffect(() => {
     trainsRef.current = trains;
   }, [trains]);
+
+  /*
+   * Smooth movement between canonical frames. The position comes from the shared motion store —
+   * the same one the 3D trains read — so the marker and the 3D train are always at the same point
+   * of the same leg. This loop writes the markers' transforms directly: a React render per display
+   * frame for every train would cost far more than the motion is worth. It does no work at all
+   * when nothing is blending and the zoom hasn't changed (a paused simulation, an idle feed).
+   */
+  const motion = useOptionalTrainMotion();
+  const markerElements = useRef(new Map<number, SVGGElement>());
+  const placementRef = useRef({ scale, stationsById, project, dirty: true });
+  useEffect(() => {
+    placementRef.current = { scale, stationsById, project, dirty: true };
+  }, [scale, stationsById, project]);
+
+  const placeMarker = useCallback(
+    (id: number, element: SVGGElement, now: number) => {
+      const sampled = motion?.sample(id, now);
+      if (!sampled) return;
+      const { stationsById: byId, project: projector, scale: currentScale } = placementRef.current;
+      const point = interpolateTrainPoint(sampled, byId, projector);
+      if (point) element.setAttribute("transform", trainMarkerTransform(point, currentScale));
+    },
+    [motion],
+  );
+
+  const registerMarker = useCallback(
+    (id: number, element: SVGGElement | null) => {
+      if (!element) {
+        markerElements.current.delete(id);
+        return;
+      }
+      markerElements.current.set(id, element);
+      placeMarker(id, element, performance.now()); // placed before its first paint
+    },
+    [placeMarker],
+  );
+
+  useEffect(() => {
+    if (!motion) return;
+    let raf = 0;
+    let wasAnimating = true;
+    let drawnRevision = -1;
+    const loop = () => {
+      const now = performance.now();
+      const animating = motion.isAnimating(now);
+      const placement = placementRef.current;
+      // One extra pass after a blend ends so every marker settles exactly on its target; a new
+      // revision covers snaps, which change positions without blending.
+      if (animating || wasAnimating || placement.dirty || motion.revision !== drawnRevision) {
+        for (const [id, element] of markerElements.current) placeMarker(id, element, now);
+        placement.dirty = false;
+        drawnRevision = motion.revision;
+      }
+      wasAnimating = animating;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [motion, placeMarker]);
 
   useEffect(() => {
     if (selectedTrainId == null) return;
@@ -240,6 +304,7 @@ export function MetroMap({
                 selected={train.id === selectedTrainId}
                 dimmed={isDimmed(train.lineCode)}
                 onSelect={(t) => onSelectTrain(t.id)}
+                registerMarker={motion ? registerMarker : undefined}
               />
             );
           })}
@@ -262,6 +327,7 @@ export function MetroMap({
           tracks={tracks}
           trains={trains}
           passengers={passengers}
+          serverNowMs={serverNowMs}
           onClose={() => onSelectStation(null)}
           onEnter3D={onEnter3D ? (station) => onEnter3D(station, transform) : undefined}
         />

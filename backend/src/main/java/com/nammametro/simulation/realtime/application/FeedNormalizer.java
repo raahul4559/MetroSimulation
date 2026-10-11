@@ -38,6 +38,9 @@ import java.util.TreeMap;
  * train whose direction the feed doesn't reveal. Rejection counts are reported in the provider's
  * health so the operator can see (and fix, via {@link FeedMapping}) what isn't landing.
  *
+ * <p>Route: the feed's route id through {@link FeedMapping}; failing that, the line whose track is
+ * unambiguously nearest the reported coordinates (see {@link #ROUTE_AMBIGUITY_MARGIN_METRES}).
+ *
  * <p>Placement, in order of preference:
  * <ol>
  *   <li>{@code STOPPED_AT} a mapped station → at the platform ({@code previousStationId ==
@@ -58,6 +61,12 @@ public final class FeedNormalizer {
     public static final String REJECT_AMBIGUOUS_DIRECTION = "AMBIGUOUS_DIRECTION";
     public static final String REJECT_OFF_NETWORK = "OFF_NETWORK";
     public static final String REJECT_NO_POSITION = "NO_POSITION";
+    public static final String REJECT_AMBIGUOUS_ROUTE = "AMBIGUOUS_ROUTE";
+
+    /** When a vehicle's route can't be mapped, its coordinates may still identify the line — but
+     * only if the nearest line's track is at least this much closer than any other line's. Near an
+     * interchange, where two lines run side by side, the vehicle is rejected rather than guessed. */
+    static final double ROUTE_AMBIGUITY_MARGIN_METRES = 75;
 
     /** Roughly Bengaluru's metro catchment, padded. Coordinates outside it are ignored, not trusted. */
     private static final double PAD_DEGREES = 0.25;
@@ -134,8 +143,17 @@ public final class FeedNormalizer {
             String routeId = vehicle.routeId() != null ? vehicle.routeId() : update != null ? update.routeId() : null;
             Optional<Line> line = mapping.line(routeId, network);
             if (line.isEmpty()) {
-                reject(rejections, REJECT_UNKNOWN_ROUTE);
-                continue;
+                Coordinates coordinates = usableCoordinates(vehicle);
+                if (coordinates == null) {
+                    reject(rejections, REJECT_UNKNOWN_ROUTE);
+                    continue;
+                }
+                RouteMatch match = nearestLine(coordinates);
+                if (match.rejection() != null) {
+                    reject(rejections, match.rejection());
+                    continue;
+                }
+                line = Optional.of(match.line());
             }
 
             Placement placement = place(vehicle, update, line.get(), mapping, fetchedAt);
@@ -180,6 +198,53 @@ public final class FeedNormalizer {
                     alert.activeFrom(), alert.activeUntil(), lineCodes, stationIds));
         }
         return resolved;
+    }
+
+    // --- route identification ---------------------------------------------------------------------
+
+    private record RouteMatch(Line line, String rejection) {
+    }
+
+    /** The line whose track passes closest to {@code point}, if it is within snapping distance and
+     * clearly closer than every other line. Distances are measured along each leg's own polyline,
+     * so the track graph — not straight lines between arbitrary stations — decides. */
+    private RouteMatch nearestLine(Coordinates point) {
+        Line best = null;
+        double bestDistance = Double.MAX_VALUE;
+        double runnerUp = Double.MAX_VALUE;
+        for (Line line : network.allLines()) {
+            double distance = distanceToLine(line, point);
+            if (distance < bestDistance) {
+                runnerUp = bestDistance;
+                bestDistance = distance;
+                best = line;
+            } else if (distance < runnerUp) {
+                runnerUp = distance;
+            }
+        }
+        if (best == null || bestDistance > settings.maxSnapDistanceMetres()) {
+            return new RouteMatch(null, REJECT_OFF_NETWORK);
+        }
+        if (runnerUp - bestDistance < ROUTE_AMBIGUITY_MARGIN_METRES) {
+            return new RouteMatch(null, REJECT_AMBIGUOUS_ROUTE);
+        }
+        return new RouteMatch(best, null);
+    }
+
+    private double distanceToLine(Line line, Coordinates point) {
+        List<Station> stations = line.orderedStations();
+        double best = Double.MAX_VALUE;
+        for (int i = 0; i < stations.size() - 1; i++) {
+            Station a = stations.get(i);
+            Station b = stations.get(i + 1);
+            Optional<Track> track = network.getSingleTrackBetween(a.id(), b.id());
+            if (track.isEmpty()) {
+                continue;
+            }
+            best = Math.min(best, TrackGeometry.project(TrackGeometry.polyline(track.get(), a, b),
+                    point.latitude(), point.longitude()).distanceMetres());
+        }
+        return best;
     }
 
     // --- placement ------------------------------------------------------------------------------

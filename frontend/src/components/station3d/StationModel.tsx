@@ -161,6 +161,7 @@ function StationPlatformModule({
         <MetroTrain3D
           key={visual.trainId}
           visual={visual}
+          stationId={stationId}
           platform={platform}
           selected={visual.trainId === selectedTrainId}
           onSelect={() => onSelectTrain(visual.trainId)}

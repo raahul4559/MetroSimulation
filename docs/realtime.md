@@ -32,7 +32,11 @@ Code: `backend/.../realtime/` (backend), `frontend/src/hooks/useMetroRealtime.ts
 
 ## Source selection (`realtime.mode`, `POST /api/realtime/mode?value=`)
 
-* `AUTO` (default): first healthy of `LIVE → GTFS_REALTIME → SCHEDULE → SIMULATION`.
+* `AUTO` (default) degrades in this order:
+  1. a fresh `LIVE`, then a fresh `GTFS_REALTIME` feed;
+  2. a **stale** `LIVE`/`GTFS_REALTIME` feed: its last known trains, dead-reckoned (see below) and
+     labelled as estimates — `isLive` false, `activeSourceStale` true;
+  3. `SCHEDULE`; 4. `SIMULATION`.
   With nothing configured this is the simulation, labelled as such — the existing behaviour.
 * A pinned mode (`LIVE`, `GTFS_REALTIME`, `SCHEDULE`, `SIMULATION`) never silently falls back.
   If a pinned feed fails, the state says so (stale trains, or none, plus `sourceReason`).
@@ -46,10 +50,52 @@ Code: `backend/.../realtime/` (backend), `frontend/src/hooks/useMetroRealtime.ts
   `serverEpochMillis`; the browser derives its offset from them (`lib/realtime/serverClock.ts`) and
   shows server time in IST. `GET /api/realtime/time` returns just the clock.
 
+## From latitude/longitude to the track
+
+The track graph is the source of truth; nothing is drawn off it. `FeedNormalizer`:
+
+1. identifies the line — the feed's route id via `mapping.route-ids`; if that is unknown, the line
+   whose track is nearest the coordinates, but only when it is at least 75 m closer than any other
+   line (else rejected `AMBIGUOUS_ROUTE` — e.g. two lines running side by side);
+2. finds the leg — toward the reported next stop if given, else the nearest leg of that line;
+3. projects the coordinates onto the leg's polyline (track geometry, or the straight line between
+   its stations) for distance along it, and normalizes that to `progress` 0..1;
+4. takes direction from `direction_id` mapping, trip-update stop order, or the vehicle's bearing
+   relative to the leg — and rejects the vehicle if none of them settles it.
+
+Coordinates further than `max-snap-distance-metres` from the track are rejected `OFF_NETWORK`.
+
+## Between updates: one motion system
+
+* **Server:** `TrainExtrapolator` publishes every second. A *fresh* train is advanced along its
+  current leg (by the feed's ETA, else nominal running time) but never shown arriving — only the
+  feed may report that. A *stale* train is dead-reckoned along its route from its last fix at the
+  network's nominal leg and dwell times, through stations, held at the terminus; its speed and ETA
+  are cleared (an estimate has neither) and it is flagged `stale` + `positionEstimated`.
+* **Browser:** `lib/realtime/trainMotion.ts` is the only animation of train position. Each frame
+  is a keyframe; the store blends from where a train is drawn to the new keyframe over the
+  *server-time* interval between frames, along the line's station sequence (so through stations,
+  never across them), and snaps on new trips, multi-leg jumps, large backward corrections, stalls
+  or reduced-motion. The 2D marker (`MetroMap`'s rAF loop, which writes SVG transforms directly —
+  no React render per display frame, idle when nothing moves) and the 3D train (`MetroTrain3D`'s
+  `useFrame`, via `resolveTrainPhase` + `trainPose3D`) both sample it at the same instant, so they
+  are always at the same point of the same leg. The 3D follow camera aims at the same sample.
+* Discrete state — status, current/next station, delay, ETA, source, last update — is the
+  canonical frame's, unmodified; station arrival boards and announcements read it directly. The
+  drawn position trails it by at most one frame interval (normally 1 s).
+
+## Diagnostics
+
+The operations page has a **Realtime data** panel, and the map shows a compact version when
+**Settings → Data diagnostics** is on: data source, last update, data age, train count, fresh /
+interpolated / stale positions, connection (and time since the last frame), each provider's status
+and rejection counts, and the browser's clock offset from the server. Ages tick every second even
+if frames stop.
+
 ## Freshness, errors, reconnects
 
-* `realtime.stale-after` (90s): an observation older than this is `stale` — still shown (faded,
-  dashed outline on the map), never extrapolated. A feed whose own header timestamp stops
+* `realtime.stale-after` (90s): an observation older than this is `stale` — shown as a
+  dead-reckoned estimate (faded, dashed outline on the map; "estimated (stale)" everywhere). A feed whose own header timestamp stops
   advancing goes `STALE` even if HTTP requests keep succeeding.
 * `realtime.expire-after` (5m): older observations are dropped rather than left frozen on the map.
 * Timestamps more than `max-clock-skew` in the future are clamped to server time and warned.

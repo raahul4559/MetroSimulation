@@ -23,6 +23,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { MetroMap } from "./MetroMap";
 import { MapLegend } from "./MapLegend";
 import { NetworkStatusCard } from "./NetworkStatusCard";
+import { RealtimeDiagnostics } from "@/components/realtime/RealtimeDiagnostics";
+import { Surface } from "@/components/ui/Surface";
+import { useMapPreferences } from "@/hooks/useMapPreferences";
 
 /**
  * Code-split on purpose. `StationImmersionScene` is the one module that pulls in
@@ -61,7 +64,8 @@ const StationImmersionScene = dynamic(
  */
 export function NetworkStage() {
   const { lines, stations, tracks, isLoading, error } = useNetworkData();
-  const { trains, signals, passengers, disruptions, timeOfDay, serviceRunning } = useSimulationData();
+  const { state, trains, signals, passengers, disruptions, timeOfDay, serviceRunning } = useSimulationData();
+  const [preferences] = useMapPreferences();
   const { hiddenLineCodes, toggleLine } = useLineVisibilityContext();
   const { selectedTrainId, selectedStationId, focusToken, selectTrain, selectStation } =
     useTrainSelection();
@@ -143,6 +147,7 @@ export function NetworkStage() {
             trains={trains}
             signals={signals}
             passengers={passengers}
+            serverNowMs={state?.serverEpochMillis}
             hiddenLineCodes={hiddenLineCodes}
             selectedTrainId={selectedTrainId}
             onSelectTrain={selectTrain}
@@ -196,6 +201,11 @@ export function NetworkStage() {
       */}
       {immersion.phase === "map" && (
         <div className="pointer-events-none absolute bottom-3 left-3 hidden flex-col gap-2 sm:flex sm:bottom-4 sm:left-4">
+          {preferences.diagnosticsVisible && (
+            <Surface variant="overlay" padding="sm" className="pointer-events-auto w-64">
+              <RealtimeDiagnostics variant="overlay" />
+            </Surface>
+          )}
           <MapLegend lines={lines} hiddenLineCodes={hiddenLineCodes} onToggleLine={toggleLine} />
           <NetworkStatusCard
             stationCount={stations.length}

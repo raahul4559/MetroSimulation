@@ -19,9 +19,11 @@ export interface TrainPose3D {
 
 /**
  * A train's exact scene position for one frame, given its resolved phase/localProgress (see
- * `trainVisual.ts`) — the only place backend {@code progress}/{@code status} become 3D coordinates.
- * Deliberately pure and framerate-independent: {@code MetroTrain3D} is what smooths frame-to-frame
- * motion by lerping its rendered position toward whatever this returns, not this function itself.
+ * `trainVisual.ts`) — the only place track {@code progress}/{@code status} become 3D coordinates.
+ * Pure and continuous: the approach curve (APPROACHING, then ARRIVING) ends exactly at the stopping
+ * point (z = 0) where STOPPED/BOARDING stand, and DEPARTING starts from it — so a train whose
+ * progress moves smoothly (it does: `MetroTrain3D` feeds this the shared motion store's sample every
+ * display frame) moves smoothly here too, with no per-renderer smoothing of its own.
  */
 export function trainPose3D(
   platform: Pick<PlatformLayout3D, "moduleIndex">,
@@ -35,23 +37,19 @@ export function trainPose3D(
 
   let z: number;
   switch (phase) {
-    case "APPROACHING": {
+    case "APPROACHING":
+    case "ARRIVING": {
       const farZ = forwardSign * -(PLATFORM_HALF_LENGTH + APPROACH_LENGTH);
-      const brakingZ = forwardSign * -(PLATFORM_HALF_LENGTH * 0.35);
-      z = lerp(farZ, brakingZ, localProgress);
+      z = lerp(farZ, 0, localProgress);
       break;
     }
-    case "ARRIVING":
-      z = forwardSign * -(PLATFORM_HALF_LENGTH * 0.15);
-      break;
     case "STOPPED":
     case "BOARDING":
       z = 0;
       break;
     case "DEPARTING": {
-      const clearingZ = forwardSign * (PLATFORM_HALF_LENGTH * 0.15);
       const farZ = forwardSign * (PLATFORM_HALF_LENGTH + DEPART_LENGTH);
-      z = lerp(clearingZ, farZ, localProgress);
+      z = lerp(0, farZ, localProgress);
       break;
     }
   }

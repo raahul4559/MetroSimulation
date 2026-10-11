@@ -10,7 +10,8 @@ import {
   densityLevel,
   getStationQueue,
 } from "@/lib/metro/passengerDisplay";
-import { formatEta, getStationArrivals } from "@/lib/metro/stationArrivals";
+import { formatEta, getStationArrivals, type StationArrival } from "@/lib/metro/stationArrivals";
+import { trainSourceLabel } from "@/lib/realtime/provenance";
 import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
 import { delayStats, formatDelay, isLate } from "@/lib/metro/trainDisplay";
 import { lineVividColor } from "@/lib/ui/lineColor";
@@ -27,8 +28,23 @@ interface StationPanelProps {
   tracks: readonly Track[];
   trains: readonly TrainState[];
   passengers: readonly Passenger[];
+  /** Authoritative now (the canonical frame's server time, epoch ms), for feed-predicted ETAs. */
+  serverNowMs?: number | undefined;
   onClose: () => void;
   onEnter3D?: ((station: Station) => void) | undefined;
+}
+
+/** A short qualifier for ETAs that aren't a live prediction. */
+const ETA_BASIS_NOTE: Record<StationArrival["etaBasis"], string | null> = {
+  PREDICTED: null,
+  TIMETABLE: "timetable",
+  NOMINAL: null,
+};
+
+function etaNote(arrival: StationArrival): string | null {
+  if (arrival.atPlatform) return null;
+  if (arrival.etaBasis === "NOMINAL" && arrival.train.source !== "SIMULATION") return "est.";
+  return ETA_BASIS_NOTE[arrival.etaBasis];
 }
 
 const TYPE_LABEL: Record<Station["stationType"], string> = {
@@ -54,11 +70,12 @@ export function StationPanel({
   tracks,
   trains,
   passengers,
+  serverNowMs,
   onClose,
   onEnter3D,
 }: StationPanelProps) {
   const stationLines = getLinesForStation(station, lines);
-  const arrivals = getStationArrivals(station, trains, tracks, lines);
+  const arrivals = getStationArrivals(station, trains, tracks, lines, serverNowMs);
   const queue = getStationQueue(passengers, station.id);
   const density = densityLevel(queue.length);
 
@@ -108,6 +125,7 @@ export function StationPanel({
               </p>
               <p className="tabular shrink-0 font-mono text-lg font-semibold text-content">
                 {formatEta(next.etaSeconds)}
+                {etaNote(next) && <span className="ml-1 text-[10px] font-normal text-muted">{etaNote(next)}</span>}
               </p>
             </div>
             <p className="mt-1 text-[11px] text-muted">
@@ -119,6 +137,7 @@ export function StationPanel({
                   · {formatDelay(next.train, formatDurationSeconds)}
                 </span>
               )}
+              {next.train.source !== "SIMULATION" && ` · ${trainSourceLabel(next.train)}`}
             </p>
           </div>
         ) : (
@@ -140,6 +159,7 @@ export function StationPanel({
                 </span>
                 <span className="tabular shrink-0 font-mono text-muted">
                   {formatEta(arrival.etaSeconds)}
+                  {etaNote(arrival) && <span className="ml-1 text-[10px]">{etaNote(arrival)}</span>}
                 </span>
               </li>
             ))}

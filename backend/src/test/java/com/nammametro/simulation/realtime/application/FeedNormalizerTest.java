@@ -1,6 +1,12 @@
 package com.nammametro.simulation.realtime.application;
 
+import com.nammametro.simulation.domain.model.Coordinates;
 import com.nammametro.simulation.domain.model.TrainDirection;
+import com.nammametro.simulation.metro.domain.model.Line;
+import com.nammametro.simulation.metro.domain.model.Station;
+import com.nammametro.simulation.metro.domain.model.StationType;
+import com.nammametro.simulation.metro.domain.model.Track;
+import com.nammametro.simulation.metro.network.MetroNetwork;
 import com.nammametro.simulation.realtime.RealtimeFixtures;
 import com.nammametro.simulation.realtime.domain.DataSource;
 import com.nammametro.simulation.realtime.domain.MetroTrain;
@@ -142,5 +148,37 @@ class FeedNormalizerTest {
         assertThat(alerts.getFirst().lineCodes()).containsExactly("PURPLE");
         assertThat(alerts.getFirst().stationIds()).containsExactly(2L);
         assertThat(alerts.getFirst().suspendsService()).isTrue();
+    }
+
+    @Test
+    void anUnmappedRouteIsIdentifiedFromCoordinatesOnTheTrackGraph() {
+        // A route id this mapping doesn't know, but coordinates 40% of the way along A -> B.
+        var result = normalize(vehicle("v1", "unmapped-route", 0, null, VehicleStopStatus.IN_TRANSIT_TO, 12.97, 77.504, NOW));
+
+        assertThat(result.rejections()).isEmpty();
+        MetroTrain train = result.trains().getFirst();
+        assertThat(train.lineCode()).isEqualTo("PURPLE");
+        assertThat(train.currentTrackId()).isEqualTo(11L);
+        assertThat(train.progress()).isCloseTo(0.4, within(0.01));
+    }
+
+    @Test
+    void coordinatesBetweenTwoParallelLinesAreRejectedNotGuessed() {
+        MetroNetwork network = RealtimeFixtures.network();
+        // A second line 50 m north of PURPLE, sharing no stations.
+        Station d = new Station(4, "D", "Delta", new Coordinates(12.97045, 77.50), List.of("GREEN"), StationType.TERMINAL, 30);
+        Station e = new Station(5, "E", "Echo", new Coordinates(12.97045, 77.51), List.of("GREEN"), StationType.TERMINAL, 30);
+        network.addStation(d);
+        network.addStation(e);
+        network.addLine(new Line(2, "GREEN", "Green Line", "#00FF00", List.of(d, e)));
+        network.addTrack(new Track(21, "GREEN", d.id(), e.id(), 1086, 60, List.of()));
+        FeedNormalizer twoLines = new FeedNormalizer(network, RealtimeSettings.defaults());
+
+        var result = twoLines.normalize(DataSource.GTFS_REALTIME, MAPPING, new ProviderSnapshot(List.of(
+                vehicle("v1", null, 0, null, VehicleStopStatus.IN_TRANSIT_TO, 12.97022, 77.505, NOW)),
+                List.of(), List.of(), NOW, List.of()), NOW);
+
+        assertThat(result.trains()).isEmpty();
+        assertThat(result.rejections()).containsEntry(FeedNormalizer.REJECT_AMBIGUOUS_ROUTE, 1);
     }
 }

@@ -21,7 +21,7 @@ export function selectStationTrainVisuals(
   for (const train of trains) {
     const platform = platformsByLine.get(train.lineCode);
     if (!platform) continue;
-    const resolved = resolvePhase(train, stationId);
+    const resolved = resolveTrainPhase(train, stationId);
     if (!resolved) continue;
     const line = lineByCode.get(train.lineCode);
     const destination = destinationStation(train, line, stationsById);
@@ -48,18 +48,27 @@ export function selectStationTrainVisuals(
   return visuals;
 }
 
-function resolvePhase(train: TrainState, stationId: number): { phase: TrainPhase3D; localProgress: number } | null {
+/**
+ * Where a train is relative to this station's visible scene: its phase and how far through that
+ * phase's visible window it is — or null if it's out on the line, outside the scene. Pure; the 3D
+ * train calls it every display frame on the shared motion store's sample (the same position the 2D
+ * marker is drawn at), and the visuals list calls it on the canonical frame.
+ */
+export function resolveTrainPhase(
+  train: Pick<TrainState, "previousStationId" | "nextStationId" | "status" | "progress">,
+  stationId: number,
+): { phase: TrainPhase3D; localProgress: number } | null {
   const arrivingHere = train.nextStationId === stationId && train.previousStationId !== stationId;
   const stationaryHere = train.previousStationId === stationId && train.nextStationId === stationId;
   const departingHere = train.previousStationId === stationId && train.nextStationId !== stationId;
 
   if (arrivingHere) {
     if (train.status === "ARRIVING") {
-      return { phase: "ARRIVING", localProgress: 1 };
+      // On the same approach curve as APPROACHING, so the hand-over between the two is seamless.
+      return { phase: "ARRIVING", localProgress: approachProgress(train.progress) };
     }
     if ((train.status === "RUNNING" || train.status === "DEPARTING") && train.progress >= APPROACH_VISIBLE_FROM) {
-      const localProgress = (train.progress - APPROACH_VISIBLE_FROM) / (1 - APPROACH_VISIBLE_FROM);
-      return { phase: "APPROACHING", localProgress: clamp01(localProgress) };
+      return { phase: "APPROACHING", localProgress: approachProgress(train.progress) };
     }
     return null;
   }
@@ -76,7 +85,7 @@ function resolvePhase(train: TrainState, stationId: number): { phase: TrainPhase
 
   if (departingHere) {
     if (train.status === "DEPARTING") {
-      return { phase: "DEPARTING", localProgress: 0 };
+      return { phase: "DEPARTING", localProgress: clamp01(train.progress / DEPART_VISIBLE_TO) };
     }
     if (
       (train.status === "RUNNING" || train.status === "STOPPED" || train.status === "DELAYED") &&
@@ -107,6 +116,10 @@ function destinationStation(train: TrainState, line: Line | undefined, stationsB
 function nextStationFor(train: TrainState, platform: PlatformLayout3D, stationsById: ReadonlyMap<number, Station>): Station | null {
   const neighborId = train.direction === "OUTBOUND" ? platform.outboundNeighborId : platform.inboundNeighborId;
   return neighborId == null ? null : (stationsById.get(neighborId) ?? null);
+}
+
+function approachProgress(progress: number): number {
+  return clamp01((progress - APPROACH_VISIBLE_FROM) / (1 - APPROACH_VISIBLE_FROM));
 }
 
 function clamp01(value: number): number {

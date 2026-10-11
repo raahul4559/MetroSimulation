@@ -20,6 +20,7 @@ import { useStationReferences } from "@/hooks/useStationReferences";
 import { useStationAnnouncements } from "@/hooks/useStationAnnouncements";
 import { audioManager } from "@/lib/audio/AudioManager";
 import { announcementService, type AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
+import { TrainMotionProvider, useOptionalTrainMotion } from "@/providers/SimulationProvider";
 
 interface StationSceneProps {
   station: Station;
@@ -76,10 +77,33 @@ export function StationScene({
   );
   const atmosphere = useMemo(() => atmosphereFor(config.buildType), [config.buildType]);
 
+  const motion = useOptionalTrainMotion();
+
+  // The canonical frame's visuals: what announcements, the info bar and the camera act on.
   const trainVisuals = useMemo(() => {
     const platformsByLine = new Map(layout.platforms.map((p) => [p.lineCode, p] as const));
     return selectStationTrainVisuals(trains, station.id, platformsByLine, lineByCode, stationsById);
   }, [trains, station.id, layout.platforms, lineByCode, stationsById]);
+
+  /*
+   * What gets a mesh. The motion store draws each train up to one frame interval behind the
+   * canonical state, so a train the newest frame has already moved out of this scene is still
+   * finishing its exit on screen. The previous frame's visuals are kept one frame longer for that;
+   * each mesh hides itself the moment its sampled position actually leaves the scene. (React's
+   * "store the previous prop in state" pattern — no effect, no extra render pass.)
+   */
+  const [frameVisuals, setFrameVisuals] = useState(trainVisuals);
+  const [previousVisuals, setPreviousVisuals] = useState(trainVisuals);
+  if (frameVisuals !== trainVisuals) {
+    setPreviousVisuals(frameVisuals);
+    setFrameVisuals(trainVisuals);
+  }
+  const renderedVisuals = useMemo(() => {
+    if (!motion) return trainVisuals;
+    const current = new Set(trainVisuals.map((v) => v.trainId));
+    const leaving = previousVisuals.filter((v) => !current.has(v.trainId));
+    return leaving.length === 0 ? trainVisuals : [...trainVisuals, ...leaving];
+  }, [motion, trainVisuals, previousVisuals]);
 
   const [cameraMode, setCameraMode] = useState<CameraMode3D>("OVERVIEW");
   const [resetToken, setResetToken] = useState(0);
@@ -178,22 +202,24 @@ export function StationScene({
         <Suspense fallback={null}>
           <color attach="background" args={[atmosphere.background]} />
           <fog attach="fog" args={[atmosphere.background, atmosphere.fogNear, atmosphere.fogFar]} />
-          <StationModel
-            layout={layout}
-            trains={trainVisuals}
-            passengers={passengers}
-            asset={asset}
-            platformDestinations={platformDestinations}
-            selectedTrainId={selectedTrainId}
-            onSelectTrain={setSelectedTrainId}
-          />
-          <CameraController
-            mode={cameraMode}
-            layout={layout}
-            trains={trainVisuals}
-            buildType={config.buildType}
-            resetToken={resetToken}
-          />
+          <TrainMotionProvider value={motion}>
+            <StationModel
+              layout={layout}
+              trains={renderedVisuals}
+              passengers={passengers}
+              asset={asset}
+              platformDestinations={platformDestinations}
+              selectedTrainId={selectedTrainId}
+              onSelectTrain={setSelectedTrainId}
+            />
+            <CameraController
+              mode={cameraMode}
+              layout={layout}
+              trains={trainVisuals}
+              buildType={config.buildType}
+              resetToken={resetToken}
+            />
+          </TrainMotionProvider>
           <AudioListenerSync />
           {onReady && <SceneReadySignal onReady={onReady} />}
         </Suspense>

@@ -7,6 +7,8 @@ import * as THREE from "three";
 import type { CameraMode3D, StationLayout3D, TrainPhase3D, TrainVisual3D } from "@/domain/station3d";
 import type { StationBuildType } from "@/domain/stationConfig";
 import { trainPose3D } from "@/lib/station3d/position";
+import { resolveTrainPhase } from "@/lib/station3d/trainVisual";
+import { useOptionalTrainMotion } from "@/providers/SimulationProvider";
 import { MODULE_SPACING, PLATFORM_HALF_LENGTH, TUNNEL_HEIGHT } from "@/lib/station3d/constants";
 
 interface CameraControllerProps {
@@ -115,12 +117,25 @@ export function CameraController({ mode, layout, trains, buildType, resetToken }
     if (!isTrackingTrain) camera.position.set(...framing.position);
   }
 
+  const motion = useOptionalTrainMotion();
+
   useFrame(() => {
     if (!isTrackingTrain || !followTarget) return;
     const platform = layout.platforms.find((p) => p.lineCode === followTarget.lineCode);
     if (!platform) return;
 
-    const pose = trainPose3D(platform, followTarget.direction, followTarget.phase, followTarget.localProgress);
+    // Aim at where the train is drawn (the shared motion sample), not at the newer keyframe it is
+    // still gliding toward — otherwise the camera would lead its own subject.
+    let phase = followTarget.phase;
+    let localProgress = followTarget.localProgress;
+    const sampled = motion?.sample(followTarget.trainId, performance.now());
+    const resolved = sampled ? resolveTrainPhase(sampled, layout.stationId) : null;
+    if (resolved) {
+      phase = resolved.phase;
+      localProgress = resolved.localProgress;
+    }
+
+    const pose = trainPose3D(platform, followTarget.direction, phase, localProgress);
     const behindZ = followTarget.direction === "OUTBOUND" ? -13 : 13;
     const [desiredX, desiredZ] = rotateY(pose.x + 4, pose.z + behindZ, layout.orientationRadians);
     const [lookX, lookZ] = rotateY(pose.x, pose.z, layout.orientationRadians);

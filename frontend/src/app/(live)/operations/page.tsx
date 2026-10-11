@@ -25,6 +25,7 @@ import { StationCongestionPanel } from "@/components/operations/StationCongestio
 import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
 import { delayStats } from "@/lib/metro/trainDisplay";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
+import { RealtimeDiagnostics } from "@/components/realtime/RealtimeDiagnostics";
 
 /**
  * The operations dashboard.
@@ -39,7 +40,7 @@ import { StatusIndicator } from "@/components/ui/StatusIndicator";
  */
 export default function OperationsPage() {
   const { lines, stations, tracks } = useNetworkData();
-  const { trains, signals, passengers, disruptions, passengerMetrics, clock, feed, isSimulationSource } =
+  const { state, trains, signals, passengers, disruptions, passengerMetrics, clock, feed, isSimulationSource } =
     useSimulationData();
   const { hiddenLineCodes, toggleLine } = useLineVisibilityContext();
   const { selectedTrainId, selectTrain } = useTrainSelection();
@@ -161,6 +162,10 @@ export default function OperationsPage() {
         </div>
 
         <div className="min-w-0 space-y-4">
+          <Panel title="Realtime data" description="What the trains on screen are based on, and how fresh it is.">
+            <RealtimeDiagnostics />
+          </Panel>
+
           <Panel title="Train detail">
             <TrainDetails
               train={selectedTrain}
@@ -168,6 +173,7 @@ export default function OperationsPage() {
               stations={stations}
               tracks={tracks}
               signals={signals}
+              serverNowMs={state?.serverEpochMillis}
             />
           </Panel>
 

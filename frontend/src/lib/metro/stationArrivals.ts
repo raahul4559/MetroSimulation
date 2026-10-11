@@ -17,6 +17,9 @@ export interface StationArrival {
   readonly platformNumber: number | null;
   /** Seconds until arrival, or 0 if the train is already at the platform. */
   readonly etaSeconds: number;
+  /** Where the ETA came from: the feed's own prediction, the timetable, or the leg's nominal
+   * running time from the train's position (the simulation's, or an estimate for anything else). */
+  readonly etaBasis: "PREDICTED" | "TIMETABLE" | "NOMINAL";
   readonly atPlatform: boolean;
   /** Where this train ends up — the last station on its line in its direction of travel. */
   readonly destinationName: string;
@@ -58,6 +61,9 @@ export function getStationArrivals(
   trains: readonly TrainState[],
   tracks: readonly Track[],
   lines: readonly Line[],
+  /** Authoritative "now" (the frame's server time, epoch ms) — needed to turn a provider's
+   * predicted arrival instant into a countdown. Without it only nominal ETAs are computed. */
+  serverNowMs?: number,
 ): StationArrival[] {
   const tracksById = new Map(tracks.map((t) => [t.id, t]));
   const lineByCode = new Map(lines.map((l) => [l.code, l]));
@@ -73,15 +79,24 @@ export function getStationArrivals(
 
     const line = lineByCode.get(train.lineCode);
     const track = train.currentTrackId != null ? tracksById.get(train.currentTrackId) : undefined;
-    const remaining = track
+    const nominal = track
       ? Math.max(0, Math.round((1 - train.progress) * track.expectedTravelTimeSeconds))
       : 0;
+    const predictedAt = train.nextStationEta && !train.stale ? Date.parse(train.nextStationEta) : Number.NaN;
+    const usePrediction = serverNowMs != null && Number.isFinite(predictedAt);
+    const remaining = usePrediction ? Math.max(0, Math.round((predictedAt - serverNowMs) / 1000)) : nominal;
+    const etaBasis: StationArrival["etaBasis"] = usePrediction
+      ? train.source === "SCHEDULE"
+        ? "TIMETABLE"
+        : "PREDICTED"
+      : "NOMINAL";
 
     arrivals.push({
       train,
       line,
       platformNumber: platformNumberFor(station, lines, train.lineCode),
       etaSeconds: atPlatform ? 0 : remaining,
+      etaBasis,
       atPlatform,
       destinationName: destinationName(train, line),
     });

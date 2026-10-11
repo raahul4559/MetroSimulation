@@ -13,7 +13,7 @@ import {
   formatSpeed,
   hasOccupancy,
 } from "@/lib/metro/trainDisplay";
-import { trainSourceLabel } from "@/lib/realtime/provenance";
+import { formatAge, trainSourceLabel } from "@/lib/realtime/provenance";
 import { formatIstTimeOfDay } from "@/lib/realtime/serverClock";
 import { computeBlockChain } from "@/lib/metro/blockChain";
 
@@ -23,6 +23,8 @@ interface TrainDetailsProps {
   stations: readonly Station[];
   tracks: readonly Track[];
   signals: readonly Signal[];
+  /** The canonical frame's server time (epoch ms): the clock ETA and data age are measured on. */
+  serverNowMs?: number | undefined;
 }
 
 const ASPECT_TONE = {
@@ -35,7 +37,7 @@ const ASPECT_TONE = {
  * data, not stored redundantly on the train itself. An optional debug section reveals the raw
  * signaling chain (current block -> next block -> signal -> aspect) behind the plain-English
  * location description above it. */
-export function TrainDetails({ train, lines, stations, tracks, signals }: TrainDetailsProps) {
+export function TrainDetails({ train, lines, stations, tracks, signals, serverNowMs }: TrainDetailsProps) {
   const [debugMode, setDebugMode] = useState(false);
 
   if (!train) {
@@ -85,8 +87,28 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
         <Field label="Speed" value={formatSpeed(train.speedKmph)} />
         <Field label="Delay" value={formatDelay(train, (s) => `${s}s`)} />
         <Field label="Source" value={trainSourceLabel(train)} />
-        {train.observedAt && train.source !== "SIMULATION" && (
-          <Field label="Observed" value={formatIstTimeOfDay(Date.parse(train.observedAt))} />
+        <Field
+          label={train.previousStationId === train.nextStationId ? "At station" : "Last station"}
+          value={stationsById.get(train.previousStationId)?.name ?? `#${train.previousStationId}`}
+        />
+        {train.previousStationId !== train.nextStationId && (
+          <Field label="Next station" value={stationsById.get(train.nextStationId)?.name ?? `#${train.nextStationId}`} />
+        )}
+        {train.nextStationEta && (
+          <Field
+            label="ETA next"
+            value={`${formatIstTimeOfDay(Date.parse(train.nextStationEta))}${train.source === "SCHEDULE" ? " (timetable)" : ""}`}
+          />
+        )}
+        {train.observedAt && (
+          <Field
+            label="Last update"
+            value={`${formatIstTimeOfDay(Date.parse(train.observedAt))}${
+              serverNowMs != null && train.source !== "SIMULATION"
+                ? ` · ${formatAge(serverNowMs - Date.parse(train.observedAt))} ago`
+                : ""
+            }`}
+          />
         )}
         {train.maxSpeedKmph != null && <Field label="Max speed" value={`${train.maxSpeedKmph} km/h`} />}
         {train.dwellTimeSeconds != null && <Field label="Dwell time" value={`${train.dwellTimeSeconds}s`} />}

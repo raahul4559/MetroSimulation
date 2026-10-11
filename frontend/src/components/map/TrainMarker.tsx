@@ -12,6 +12,18 @@ interface TrainMarkerProps {
   selected: boolean;
   dimmed?: boolean;
   onSelect: (train: TrainState) => void;
+  /**
+   * When given, the map's animation loop owns this marker's position: the marker registers its
+   * element here and React never writes `transform` (a re-render would otherwise yank it back to
+   * the raw keyframe mid-blend). Without it, the marker is drawn statically at `point`.
+   */
+  registerMarker?: ((trainId: number, element: SVGGElement | null) => void) | undefined;
+}
+
+/** The marker's transform for a projected point at the current zoom — shared with the map's
+ * animation loop so the render and the loop can never disagree on the format. */
+export function trainMarkerTransform(point: Point, scale: number): string {
+  return `translate(${point.x} ${point.y}) scale(${1 / scale})`;
 }
 
 const HELD_STATUSES = new Set(["STOPPED", "DELAYED"]);
@@ -34,13 +46,15 @@ export function TrainMarker({
   selected,
   dimmed = false,
   onSelect,
+  registerMarker,
 }: TrainMarkerProps) {
   const isHeld = HELD_STATUSES.has(train.status);
   const stale = train.stale;
 
   return (
     <g
-      transform={`translate(${point.x} ${point.y}) scale(${1 / scale})`}
+      ref={registerMarker ? (element) => registerMarker(train.id, element) : undefined}
+      transform={registerMarker ? undefined : trainMarkerTransform(point, scale)}
       role="button"
       tabIndex={0}
       aria-label={`Train ${train.code}, ${trainSourceLabel(train)}`}

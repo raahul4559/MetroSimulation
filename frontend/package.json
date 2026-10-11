@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "preload-audio": "tsx scripts/preload-announcement-audio.ts"
+    "preload-audio": "tsx scripts/preload-announcement-audio.ts",
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",

@@ -59,9 +59,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p><b>Time.</b> Every "now" comes from the injected {@link Clock} — the server's clock is
  * authoritative, and tests pin it.
  *
- * <p><b>Honesty.</b> A pinned mode never falls back. {@link RealtimeMode#AUTO} falls back down the
- * chain {@code LIVE -> GTFS_REALTIME -> SCHEDULE -> SIMULATION}, and {@code sourceReason} always
- * says why the active source is the one shown.
+ * <p><b>Honesty.</b> A pinned mode never falls back. {@link RealtimeMode#AUTO} degrades: a fresh
+ * {@code LIVE}/{@code GTFS_REALTIME} feed, then a stale one's last known trains dead-reckoned as
+ * estimates ({@link TrainExtrapolator}), then {@code SCHEDULE}, then {@code SIMULATION}; and
+ * {@code sourceReason} always says why the active source is the one shown.
  */
 public class MetroStateManager {
 
@@ -298,19 +299,37 @@ public class MetroStateManager {
             return new Selection(pinned, reason);
         }
 
+        // Degradation chain: a fresh observed feed; else the last known positions of a feed that has
+        // gone stale, dead-reckoned and labelled as estimates (they are still the real trains, last
+        // seen minutes ago); else the timetable; else the simulation.
         List<String> skipped = new ArrayList<>();
-        for (DataSource candidate : AUTO_ORDER) {
+        for (DataSource candidate : List.of(DataSource.LIVE, DataSource.GTFS_REALTIME)) {
             ProviderHealth h = health.get(candidate);
             if (h != null && h.isUsable()) {
-                String reason = "Auto: using " + label(candidate);
-                if (!skipped.isEmpty()) {
-                    reason += " (" + String.join("; ", skipped) + ")";
-                }
-                return new Selection(candidate, reason);
+                return new Selection(candidate, withSkipped("Auto: using " + label(candidate), skipped));
+            }
+            skipped.add(label(candidate) + " " + (h == null ? "not registered" : h.status().name().toLowerCase()));
+        }
+        for (DataSource candidate : List.of(DataSource.LIVE, DataSource.GTFS_REALTIME)) {
+            ProviderHealth h = health.get(candidate);
+            if (h != null && h.status() == ProviderStatus.STALE) {
+                return new Selection(candidate, "Auto: " + label(candidate) + " is stale"
+                        + (h.detail() == null ? "" : " (" + h.detail() + ")")
+                        + " — showing its last known trains advanced at nominal running times (estimated)");
+            }
+        }
+        for (DataSource candidate : List.of(DataSource.SCHEDULE, DataSource.SIMULATION)) {
+            ProviderHealth h = health.get(candidate);
+            if (h != null && h.isUsable()) {
+                return new Selection(candidate, withSkipped("Auto: using " + label(candidate), skipped));
             }
             skipped.add(label(candidate) + " " + (h == null ? "not registered" : h.status().name().toLowerCase()));
         }
         return new Selection(DataSource.SIMULATION, "Auto: no source available (" + String.join("; ", skipped) + ")");
+    }
+
+    private static String withSkipped(String reason, List<String> skipped) {
+        return skipped.isEmpty() ? reason : reason + " (" + String.join("; ", skipped) + ")";
     }
 
     private static String label(DataSource source) {

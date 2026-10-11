@@ -5,23 +5,23 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PlatformLayout3D, TrainVisual3D } from "@/domain/station3d";
 import { trainPose3D } from "@/lib/station3d/position";
+import { resolveTrainPhase } from "@/lib/station3d/trainVisual";
+import { useOptionalTrainMotion } from "@/providers/SimulationProvider";
 import { TRAIN_CAR_LENGTH, TRAIN_HEIGHT, TRAIN_LENGTH, TRAIN_WIDTH } from "@/lib/station3d/constants";
 import { trainCarCenters } from "@/lib/station3d/trainLayout";
 
 interface MetroTrain3DProps {
   visual: TrainVisual3D;
+  stationId: number;
   platform: Pick<PlatformLayout3D, "moduleIndex">;
   selected: boolean;
   onSelect: () => void;
 }
 
 const DOOR_OPEN_OFFSET = 0.9;
-/** How fast the rendered (visual) position/door chases its target each frame — a fixed fraction of
- * the remaining distance, not a full snap. This is what makes motion look continuous even though
- * the authoritative backend state only updates roughly once a second; it never runs ahead of or
- * independently from that backend state, only smooths the visible gap between two real samples. */
-const POSITION_LERP = 0.12;
-const DOOR_LERP = 0.15;
+/** Door panels' opening time constant, in seconds. Doors are a mechanism animating toward the
+ * state the canonical phase sets (BOARDING = open) — not a position, so not the motion store's job. */
+const DOOR_TIME_CONSTANT_S = 0.35;
 
 const bodyMaterial = new THREE.MeshStandardMaterial({ color: "#e6e8eb", roughness: 0.45, metalness: 0.35 });
 
@@ -39,36 +39,47 @@ const doorMaterial = new THREE.MeshStandardMaterial({ color: "#20242c", roughnes
 const glassMaterial = new THREE.MeshStandardMaterial({ color: "#8fb7d9", roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.55 });
 
 /**
- * The reusable metro train mesh — one instance per `TrainVisual3D`, and the ONLY thing in this
- * feature that turns simulation state into a moving object. It reads its target pose from
- * `trainPose3D` every frame and eases its rendered transform toward it; it never advances phase,
- * progress, or door state on its own clock. The same train shown here is the same `TrainState` id
- * driving its diamond marker on the 2D map — just a different renderer for the identical data.
+ * The reusable metro train mesh — one instance per `TrainVisual3D`. It has no animation of its
+ * own: every display frame it asks the shared motion store (`lib/realtime/trainMotion`) where this
+ * train is — the exact sample the 2D map marker is drawn from at that moment — resolves that onto
+ * this station's scene (`resolveTrainPhase`) and places the mesh there (`trainPose3D`). Both are
+ * pure, so the 3D train and the 2D marker cannot drift apart. It hides itself while the sampled
+ * position is out on the line beyond the scene's visible window.
+ *
+ * Outside the live provider (no motion store) it is placed at the canonical visual's pose as-is.
  */
-export function MetroTrain3D({ visual, platform, selected, onSelect }: MetroTrain3DProps) {
+export function MetroTrain3D({ visual, stationId, platform, selected, onSelect }: MetroTrain3DProps) {
   const groupRef = useRef<THREE.Group>(null);
   const doorProgressRef = useRef(0);
-  const initializedRef = useRef(false);
+  const motion = useOptionalTrainMotion();
 
-  const targetPose = trainPose3D(platform, visual.direction, visual.phase, visual.localProgress);
-  const doorsOpenTarget = visual.phase === "BOARDING" ? 1 : 0;
-
-  useFrame(() => {
+  useFrame((_, deltaSeconds) => {
     const group = groupRef.current;
     if (!group) return;
 
-    if (!initializedRef.current) {
-      group.position.set(targetPose.x, targetPose.y, targetPose.z);
-      group.rotation.y = targetPose.facing;
-      initializedRef.current = true;
-    } else {
-      group.position.x += (targetPose.x - group.position.x) * POSITION_LERP;
-      group.position.z += (targetPose.z - group.position.z) * POSITION_LERP;
-      group.position.y = targetPose.y;
-      group.rotation.y = targetPose.facing;
+    let phase = visual.phase;
+    let localProgress = visual.localProgress;
+    let direction = visual.direction;
+    if (motion) {
+      const sampled = motion.sample(visual.trainId, performance.now());
+      const resolved = sampled ? resolveTrainPhase(sampled, stationId) : null;
+      if (!sampled || !resolved) {
+        group.visible = false;
+        return;
+      }
+      phase = resolved.phase;
+      localProgress = resolved.localProgress;
+      direction = sampled.direction;
     }
+    group.visible = true;
 
-    doorProgressRef.current += (doorsOpenTarget - doorProgressRef.current) * DOOR_LERP;
+    const pose = trainPose3D(platform, direction, phase, localProgress);
+    group.position.set(pose.x, pose.y, pose.z);
+    group.rotation.y = pose.facing;
+
+    const doorsOpenTarget = phase === "BOARDING" ? 1 : 0;
+    const doorStep = 1 - Math.exp(-Math.min(deltaSeconds, 0.1) / DOOR_TIME_CONSTANT_S);
+    doorProgressRef.current += (doorsOpenTarget - doorProgressRef.current) * doorStep;
     const doors = (group.userData.doors ?? []) as THREE.Mesh[];
     for (const door of doors) {
       // The platform-facing side is always local X = -1 in this model's own unrotated frame: the

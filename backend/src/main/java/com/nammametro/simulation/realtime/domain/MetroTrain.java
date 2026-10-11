@@ -96,6 +96,19 @@ public record MetroTrain(
                 observedAt, newStale, positionEstimated);
     }
 
+    /** The same train moved to a different place on the track graph — used when a position is
+     * estimated rather than observed. Speed and ETA are passed in explicitly because an estimate
+     * must not carry forward an observed speed or a predicted arrival it no longer supports. */
+    public MetroTrain withPosition(Long newTrackId, long newPreviousStationId, long newNextStationId,
+                                   double newProgress, TrainStatus newStatus, Double newSpeedKmph,
+                                   Instant newNextStationEta, boolean estimated) {
+        return new MetroTrain(id, code, lineCode, direction, newTrackId, newPreviousStationId, newNextStationId,
+                newProgress, newSpeedKmph, newStatus, passengerCount, capacity, delaySeconds, newNextStationEta,
+                position, scheduledDepartureSeconds, dwellTimeSeconds, maxSpeedKmph, accelerationMps2,
+                brakingRateMps2, scheduledArrivalSeconds, actualArrivalSeconds, actualDepartureSeconds, source,
+                vehicleId, tripId, observedAt, stale, estimated);
+    }
+
     /** Stable identity across fetches: the same physical vehicle (or timetabled trip) keeps the
      * same numeric {@link #id} for as long as it keeps appearing. */
     public String identityKey() {
