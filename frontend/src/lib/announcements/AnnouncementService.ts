@@ -1,14 +1,11 @@
-import type { AnnouncementEvent, LanguageCode } from "@/domain/announcement";
+import { CHIME_ONLY_TYPES, type AnnouncementEvent } from "@/domain/announcement";
 import { audioManager } from "@/lib/audio/AudioManager";
 import { voiceProvider } from "@/lib/audio/VoiceProvider";
 import { buildAnnouncementText } from "./templates";
-import { AnnouncementQueue } from "./AnnouncementQueue";
+import { AnnouncementQueue, type QueueCaption } from "./AnnouncementQueue";
 
-export interface AnnouncementCaption {
-  readonly text: string;
-  readonly language: LanguageCode;
-  readonly event: AnnouncementEvent;
-}
+/** What the PA is saying right now, in which language, and how it's being delivered. */
+export type AnnouncementCaption = QueueCaption;
 
 /**
  * The orchestrator the spec's architecture diagram calls `AnnouncementService`: takes a real
@@ -16,7 +13,7 @@ export interface AnnouncementCaption {
  * `TrainPhase3D`/disruption/delay transitions — never invented here), resolves the operator's
  * configured `languageMode` and per-language text (`templates/`), and hands each language's
  * utterance to `VoiceProvider` through an `AnnouncementQueue` so multiple languages/events never
- * overlap. A module-level singleton, like `AudioManager` — the 3D scene only ever calls
+ * overlap and the most urgent one always goes first. A module-level singleton, like `AudioManager` — the 3D scene only ever calls
  * {@link announce}, it never touches templates, the queue, or `VoiceProvider` directly.
  */
 class AnnouncementServiceImpl {
@@ -24,17 +21,18 @@ class AnnouncementServiceImpl {
   private readonly queue: AnnouncementQueue;
 
   constructor() {
-    this.queue = new AnnouncementQueue(
-      (text, language) => voiceProvider.speak(text, language, { volume: audioManager.getSettings().volume }),
-      (event, language) => buildAnnouncementText(event.type, event.data, language),
-      (state) => {
+    this.queue = new AnnouncementQueue({
+      prepare: (text, language) => voiceProvider.prepare(text, language, { volume: audioManager.getSettings().volume }),
+      textFor: (event, language) => buildAnnouncementText(event.type, event.data, language),
+      onCaption: (state) => {
         for (const listener of this.listeners) listener(state);
       },
-      () => {
+      isEnabled: () => {
         const settings = audioManager.getSettings();
         return !settings.muted && settings.announcementsEnabled;
-      }
-    );
+      },
+      interrupt: () => voiceProvider.cancelAll(),
+    });
 
     // A mid-announcement mute/disable should cut the PA immediately, not let whatever's already
     // queued keep talking until it drains naturally.
@@ -44,12 +42,15 @@ class AnnouncementServiceImpl {
   }
 
   /** Queues `event` to be spoken in the operator's currently-configured language(s), in order, with
-   * natural pauses between them — a no-op if audio is muted or announcements are turned off. Never
-   * called for `LOW`-priority events by design (see `ANNOUNCEMENT_PRIORITY`); the matching
-   * chime/rumble sound effect *is* the whole announcement for those. */
+   * natural pauses between them — a no-op if audio is muted or announcements are turned off, and
+   * for `CHIME_ONLY_TYPES`, whose chime (played by the scene) is the whole announcement. Each
+   * language's audio starts loading immediately, so it's usually ready by the time its turn comes. */
   announce(event: AnnouncementEvent): void {
     const settings = audioManager.getSettings();
-    if (settings.muted || !settings.announcementsEnabled) return;
+    if (settings.muted || !settings.announcementsEnabled || CHIME_ONLY_TYPES.has(event.type)) return;
+    for (const language of settings.languageMode) {
+      voiceProvider.prefetch(buildAnnouncementText(event.type, event.data, language), language);
+    }
     this.queue.enqueue(event, settings.languageMode);
   }
 

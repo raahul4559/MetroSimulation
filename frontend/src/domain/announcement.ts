@@ -3,13 +3,14 @@ import type { DisruptionType } from "./trainsim/disruption";
 
 /**
  * A station-announcement trigger — always fired off a real transition or a real state fact in the
- * shared simulation state (a `TrainPhase3D` edge, an active `Disruption`, a delayed `TrainState`;
- * see `lib/station3d/announcementService.ts`), never on a timer or user action of its own.
- * `AnnouncementService`/`AudioManager` are the only consumers of the *text* this produces; this type
+ * canonical realtime frame (a `TrainPhase3D` edge, an active `Disruption`, a realtime alert, a
+ * delayed `TrainState`; see `lib/station3d/announcementService.ts`), never on a timer or user action
+ * of its own. `AnnouncementService` is the only consumer of the *text* this produces; this type
  * itself carries only the real dynamic facts an announcement is built from — never pre-rendered
  * English prose, so every configured language can build its own natural sentence from the same data.
  */
 export type AnnouncementType =
+  | "EMERGENCY"
   | "TRAIN_APPROACHING"
   | "TRAIN_ARRIVING"
   | "TRAIN_AT_PLATFORM"
@@ -23,28 +24,60 @@ export type AnnouncementType =
   | "SERVICE_DISRUPTION"
   | "SAFETY";
 
-/** How insistently an announcement competes for PA airtime — see `AnnouncementQueue`. `HIGH` events
- * are always spoken and always win ordering; `MEDIUM` events are spoken unless the queue already has
- * a backlog; `LOW` events never get a voice at all (the matching chime/rumble effect is the whole
- * announcement) so the platform doesn't drown in narration for every minor phase edge. */
-export type AnnouncementPriority = "LOW" | "MEDIUM" | "HIGH";
+/**
+ * How insistently an announcement competes for PA airtime, highest first — see
+ * `AnnouncementQueue`, which always plays the highest-priority waiting job next, lets `EMERGENCY`
+ * cut off whatever is mid-sentence, and only ever drops the lower tiers under backlog.
+ */
+export type AnnouncementPriority =
+  | "EMERGENCY"
+  | "SAFETY"
+  | "SERVICE_DISRUPTION"
+  | "TRAIN_APPROACHING"
+  | "TRAIN_ARRIVING"
+  | "TRAIN_DEPARTING"
+  | "NEXT_STATION"
+  | "GENERAL_INFORMATION";
+
+/** Lower is more urgent. */
+export const PRIORITY_RANK: Readonly<Record<AnnouncementPriority, number>> = {
+  EMERGENCY: 0,
+  SAFETY: 1,
+  SERVICE_DISRUPTION: 2,
+  TRAIN_APPROACHING: 3,
+  TRAIN_ARRIVING: 4,
+  TRAIN_DEPARTING: 5,
+  NEXT_STATION: 6,
+  GENERAL_INFORMATION: 7,
+};
 
 /** Fixed per `AnnouncementType` — not a per-event choice — so priority stays predictable and can't
  * drift between two announcements of the same kind. */
 export const ANNOUNCEMENT_PRIORITY: Readonly<Record<AnnouncementType, AnnouncementPriority>> = {
-  TRAIN_APPROACHING: "HIGH",
-  SAFETY: "HIGH",
-  TRAIN_DEPARTING: "HIGH",
-  DELAY: "HIGH",
-  SERVICE_DISRUPTION: "HIGH",
-  BOARDING: "MEDIUM",
-  TRANSFER: "MEDIUM",
-  NEXT_STATION: "MEDIUM",
-  TRAIN_ARRIVING: "LOW",
-  TRAIN_AT_PLATFORM: "LOW",
-  DOORS_OPENING: "LOW",
-  DOORS_CLOSING: "LOW",
+  EMERGENCY: "EMERGENCY",
+  SAFETY: "SAFETY",
+  SERVICE_DISRUPTION: "SERVICE_DISRUPTION",
+  DELAY: "SERVICE_DISRUPTION",
+  TRAIN_APPROACHING: "TRAIN_APPROACHING",
+  TRAIN_ARRIVING: "TRAIN_ARRIVING",
+  TRAIN_AT_PLATFORM: "TRAIN_ARRIVING",
+  DOORS_OPENING: "TRAIN_ARRIVING",
+  BOARDING: "TRAIN_ARRIVING",
+  DOORS_CLOSING: "TRAIN_DEPARTING",
+  TRAIN_DEPARTING: "TRAIN_DEPARTING",
+  NEXT_STATION: "NEXT_STATION",
+  TRANSFER: "GENERAL_INFORMATION",
 };
+
+/** Event types that only ever sound a chime (see `StationScene`) and never get a voice — a real
+ * platform doesn't narrate every phase edge, and speaking all of them back to back is exactly what
+ * makes a PA sound robotic. They still flow through detection so the chime is event-driven too. */
+export const CHIME_ONLY_TYPES: ReadonlySet<AnnouncementType> = new Set([
+  "TRAIN_ARRIVING",
+  "TRAIN_AT_PLATFORM",
+  "DOORS_OPENING",
+  "DOORS_CLOSING",
+]);
 
 /** The three languages this station PA can speak. Kept separate from `LanguageMode` (a *set* of
  * these, in playback order) because a single announcement's text is always built one language at a
@@ -105,10 +138,10 @@ export interface AnnouncementData {
   /** Other lines' display names reachable by interchange at this station — populated only for
    * `TRANSFER`. */
   readonly transferLines: readonly string[] | null;
-  /** Plain-language description of an active disruption — populated only for `SERVICE_DISRUPTION`.
-   * Always operator-authored English free text (see `CreateDisruptionRequest.description`), so it
-   * is only ever spoken in the English pass; see `disruptionType` for what Hindi/Kannada speak
-   * instead. */
+  /** Plain-language description of an active disruption or realtime alert — populated only for
+   * `SERVICE_DISRUPTION`/`EMERGENCY`. Always English free text (an operator's
+   * `CreateDisruptionRequest.description`, or a feed alert's header), so it is only ever spoken in
+   * the English pass; see `disruptionType` for what Hindi/Kannada speak instead. */
   readonly disruptionDescription: string | null;
   /** The disruption's fixed type — populated only for `SERVICE_DISRUPTION`. Every language builds
    * its own natural sentence from this (see `templates/*.ts`'s `disruptionTypeTemplates`) rather
@@ -121,8 +154,8 @@ export interface AnnouncementEvent {
   readonly id: string;
   readonly type: AnnouncementType;
   readonly priority: AnnouncementPriority;
-  /** `null` for station-wide events not tied to any one train (currently only `SERVICE_DISRUPTION`
-   * for a station-level disruption). */
+  /** `null` for station-wide events not tied to any one train (`SERVICE_DISRUPTION`/`EMERGENCY`
+   * raised from a disruption or realtime alert). */
   readonly trainId: number | null;
   readonly data: AnnouncementData;
 }
@@ -145,3 +178,25 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   ambienceEnabled: true,
   languageMode: DEFAULT_LANGUAGE_MODE,
 };
+
+/**
+ * How an announcement actually reached the listener — shown next to the caption so a synthetic
+ * voice is never mistaken for a real recording, and a silent failure is never mistaken for audio:
+ *
+ * - `RECORDED` — a real recording from `public/audio/announcements/manifest.json`, carrying its
+ *   license and attribution (see `lib/audio/recordedClips.ts`).
+ * - `SYNTHESIZED` — a cached, PA-processed cloud-TTS clip from the backend.
+ * - `BROWSER_SPEECH` — the browser's own speech engine, the lowest-quality voice tier.
+ * - `TEXT_ONLY` — no audio could be played; the caption is the whole announcement.
+ */
+export type AnnouncementDelivery = "RECORDED" | "SYNTHESIZED" | "BROWSER_SPEECH" | "TEXT_ONLY";
+
+/** Provenance of a `RECORDED` clip, straight from its manifest entry. */
+export interface RecordedClipProvenance {
+  readonly attribution: string;
+  readonly license: string;
+  readonly sourceUrl: string | null;
+  /** True only when the manifest entry documents BMRCL's own permission for it — see
+   * `lib/audio/recordedClips.ts`. Nothing else may describe audio as official. */
+  readonly official: boolean;
+}

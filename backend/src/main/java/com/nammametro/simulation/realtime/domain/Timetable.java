@@ -1,5 +1,7 @@
 package com.nammametro.simulation.realtime.domain;
 
+import com.nammametro.simulation.domain.model.TrainDirection;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -96,39 +98,60 @@ public record Timetable(
         }
     }
 
+    /** {@code WEEKDAY} is every Monday–Friday not otherwise configured — Tuesday to Friday when a
+     * separate {@code MONDAY} timetable exists (as BMRCL publishes, Monday starting earlier). */
     public enum DayType {
         WEEKDAY,
+        MONDAY,
         SATURDAY,
         SUNDAY
     }
 
-    /** {@code periods} per day type. A missing {@code SATURDAY} falls back to {@code WEEKDAY}; a
-     * missing {@code SUNDAY} has no fallback — Namma Metro's Sunday hours differ, so an unconfigured
-     * Sunday is reported as unknown rather than borrowed from weekdays. */
-    public record LineTimetable(Map<DayType, List<ServicePeriod>> periods) {
+    /**
+     * {@code periods} per day type, shared by both directions, and/or {@code byDirection}: separate
+     * periods per direction of travel (each terminus has its own first and last train). A direction
+     * with its own periods uses only those.
+     *
+     * <p>A missing {@code MONDAY} or {@code SATURDAY} falls back to {@code WEEKDAY}; a missing
+     * {@code SUNDAY} has no fallback — Namma Metro's Sunday hours differ, so an unconfigured Sunday is
+     * reported as unknown rather than borrowed from weekdays.
+     */
+    public record LineTimetable(Map<DayType, List<ServicePeriod>> periods,
+                                Map<TrainDirection, Map<DayType, List<ServicePeriod>>> byDirection) {
 
         public LineTimetable {
             periods = periods == null ? Map.of() : Map.copyOf(periods);
+            byDirection = byDirection == null ? Map.of() : Map.copyOf(byDirection);
         }
 
-        public List<ServicePeriod> periodsFor(DayType dayType) {
-            List<ServicePeriod> direct = periods.get(dayType);
+        public LineTimetable(Map<DayType, List<ServicePeriod>> periods) {
+            this(periods, Map.of());
+        }
+
+        public List<ServicePeriod> periodsFor(DayType dayType, TrainDirection direction) {
+            Map<DayType, List<ServicePeriod>> source = byDirection.getOrDefault(direction, Map.of());
+            if (source.values().stream().allMatch(List::isEmpty)) {
+                source = periods;
+            }
+            List<ServicePeriod> direct = source.get(dayType);
             if (direct != null && !direct.isEmpty()) {
                 return direct;
             }
-            if (dayType == DayType.SATURDAY) {
-                return periods.getOrDefault(DayType.WEEKDAY, List.of());
+            if (dayType == DayType.SATURDAY || dayType == DayType.MONDAY) {
+                return source.getOrDefault(DayType.WEEKDAY, List.of());
             }
             return List.of();
         }
 
         boolean hasAnyPeriods() {
-            return periods.values().stream().anyMatch(p -> !p.isEmpty());
+            return periods.values().stream().anyMatch(p -> !p.isEmpty())
+                    || byDirection.values().stream().flatMap(m -> m.values().stream()).anyMatch(p -> !p.isEmpty());
         }
     }
 
-    /** Departures from each terminus every {@code headwaySeconds}, from {@code fromSeconds} up to
-     * and including {@code toSeconds}. */
+    /** Departures from a terminus at {@code fromSeconds}, then every {@code headwaySeconds}, and at
+     * {@code toSeconds} — one row of an operator's timetable ("05:20 to 10:57, every 10 min"), whose
+     * end time is itself a departure even when it isn't on the headway grid. */
     public record ServicePeriod(int fromSeconds, int toSeconds, int headwaySeconds) {
 
         public ServicePeriod {

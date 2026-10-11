@@ -2,12 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StationLayout3D, TrainVisual3D } from "@/domain/station3d";
 import type { AnnouncementEvent } from "@/domain/announcement";
 import type { Disruption } from "@/domain/trainsim";
-import { deriveAnnouncements, deriveDisruptionAnnouncements } from "@/lib/station3d/announcementService";
+import type { RealtimeAlert } from "@/domain/realtime";
+import {
+  deriveAlertAnnouncements,
+  deriveAnnouncements,
+  deriveDisruptionAnnouncements,
+} from "@/lib/station3d/announcementService";
 
 const NO_DISRUPTIONS: readonly Disruption[] = [];
+const NO_ALERTS: readonly RealtimeAlert[] = [];
 
 /**
- * Watches this station's `TrainVisual3D`s (and, if supplied, the live `Disruption` list) for real
+ * Watches this station's `TrainVisual3D`s (and, if supplied, the canonical frame's `Disruption`s
+ * and realtime alerts) for real
  * transitions and surfaces each newly-fired `AnnouncementEvent` exactly once — `latest` changes
  * identity only when a brand new event fires, so a consumer's `useEffect` keyed on `latest?.id` (see
  * `StationScene`, which hands each one to `AnnouncementService`) reacts to it exactly once, never
@@ -18,10 +25,13 @@ const NO_DISRUPTIONS: readonly Disruption[] = [];
 export function useStationAnnouncements(
   station: StationLayout3D,
   trains: readonly TrainVisual3D[],
-  disruptions: readonly Disruption[] = NO_DISRUPTIONS
+  disruptions: readonly Disruption[] = NO_DISRUPTIONS,
+  alerts: readonly RealtimeAlert[] = NO_ALERTS
 ): { latest: AnnouncementEvent | null; queue: readonly AnnouncementEvent[]; consume: () => void } {
   const previousTrainsRef = useRef<Map<number, TrainVisual3D>>(new Map());
   const previousDisruptionIdsRef = useRef<ReadonlySet<number>>(new Set());
+  // `null` until the first pass: alerts already active when the station opens are context, not news.
+  const previousAlertIdsRef = useRef<ReadonlySet<string> | null>(null);
   const [queue, setQueue] = useState<readonly AnnouncementEvent[]>([]);
 
   useEffect(() => {
@@ -39,14 +49,18 @@ export function useStationAnnouncements(
     );
     previousDisruptionIdsRef.current = activeIds;
 
-    const events = [...trainEvents, ...disruptionEvents];
+    const alertResult = deriveAlertAnnouncements(station, alerts, previousAlertIdsRef.current ?? new Set());
+    const alertEvents = previousAlertIdsRef.current ? alertResult.events : [];
+    previousAlertIdsRef.current = alertResult.activeIds;
+
+    const events = [...trainEvents, ...disruptionEvents, ...alertEvents];
     if (events.length > 0) {
       setQueue((current) => [...current, ...events]);
     }
     // `station` only changes when the operator switches stations (a fresh mount for this hook's
-    // owner in practice), so this effect really only needs to react to `trains`/`disruptions` — but
+    // owner in practice), so this effect really only needs to react to the frame's data — but
     // including it keeps the dependency list honest about everything the derivations read.
-  }, [trains, disruptions, station]);
+  }, [trains, disruptions, alerts, station]);
 
   const consume = useCallback(() => setQueue((current) => current.slice(1)), []);
 

@@ -65,7 +65,7 @@ const StationImmersionScene = dynamic(
  */
 export function NetworkStage() {
   const { lines, stations, tracks, isLoading, error } = useNetworkData();
-  const { state, trains, signals, passengers, disruptions, timeOfDay, serviceRunning } = useSimulationData();
+  const { state, trains, signals, passengers, disruptions, alerts, timeOfDay, serviceRunning } = useSimulationData();
   const [preferences] = useMapPreferences();
   const { hiddenLineCodes, toggleLine } = useLineVisibilityContext();
   const { selectedTrainId, selectedStationId, focusToken, selectTrain, selectStation } =
@@ -182,6 +182,7 @@ export function NetworkStage() {
           trains={trains}
           passengers={passengers}
           disruptions={disruptions}
+          alerts={alerts}
           clockTime={timeOfDay}
           phase={immersion.phase}
           sceneReady={sceneReady}

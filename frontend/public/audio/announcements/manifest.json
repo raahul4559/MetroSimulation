@@ -1,0 +1,4 @@
+{
+  "$comment": "Real recorded announcement clips, preferred over TTS when a sentence matches exactly. See README.md in the parent folder for the required fields. Empty on purpose: no legally reusable Namma Metro/BMRCL recording is known.",
+  "clips": []
+}

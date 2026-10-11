@@ -1,8 +1,27 @@
 "use client";
 
-import { Volume2 } from "lucide-react";
-import { LANGUAGE_LABELS } from "@/domain/announcement";
+import { MessageSquareText, Volume2 } from "lucide-react";
+import { LANGUAGE_LABELS, type AnnouncementDelivery } from "@/domain/announcement";
 import type { AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
+
+/** How the voice was produced — said plainly so a synthetic voice never passes as a recording. */
+const DELIVERY_LABELS: Readonly<Record<AnnouncementDelivery, string>> = {
+  RECORDED: "Recording",
+  SYNTHESIZED: "Synthetic voice",
+  BROWSER_SPEECH: "Browser voice",
+  TEXT_ONLY: "Text only",
+};
+
+function deliveryTitle(caption: AnnouncementCaption): string {
+  const p = caption.provenance;
+  if (caption.delivery === "RECORDED" && p) {
+    const kind = p.official ? "Official BMRCL recording" : "Recording (not official BMRCL audio)";
+    return `${kind} — ${p.attribution}, ${p.license}${p.sourceUrl ? ` — ${p.sourceUrl}` : ""}`;
+  }
+  if (caption.delivery === "SYNTHESIZED") return "Cached text-to-speech, not real Namma Metro audio";
+  if (caption.delivery === "BROWSER_SPEECH") return "This browser's speech engine, not real Namma Metro audio";
+  return "Audio unavailable — shown as text";
+}
 
 /**
  * The live caption for whatever the PA is saying right now.
@@ -10,7 +29,9 @@ import type { AnnouncementCaption } from "@/lib/announcements/AnnouncementServic
  * Mirrors the audio exactly, including which of the three languages is currently being spoken —
  * `AnnouncementService` clears it itself the moment playback stops, so this never lingers on a
  * stale line. `aria-live="polite"` makes it reach a screen reader too, which matters because the
- * announcement is otherwise purely audible.
+ * announcement is otherwise purely audible. When no audio could play, this caption *is* the
+ * announcement, held on screen long enough to read. The delivery badge says how the voice was
+ * produced; hover it for a recording's attribution and license.
  */
 export function AnnouncementIndicator({ caption }: { caption: AnnouncementCaption }) {
   return (
@@ -19,11 +40,21 @@ export function AnnouncementIndicator({ caption }: { caption: AnnouncementCaptio
       role="status"
       aria-live="polite"
     >
-      <Volume2 size={14} className="shrink-0 text-accent" aria-hidden />
+      {caption.delivery === "TEXT_ONLY" ? (
+        <MessageSquareText size={14} className="shrink-0 text-accent" aria-hidden />
+      ) : (
+        <Volume2 size={14} className="shrink-0 text-accent" aria-hidden />
+      )}
       <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-secondary">
         {LANGUAGE_LABELS[caption.language]}
       </span>
       <span className="text-xs text-content">{caption.text}</span>
+      <span
+        className="pointer-events-auto shrink-0 whitespace-nowrap text-[10px] text-secondary"
+        title={deliveryTitle(caption)}
+      >
+        {DELIVERY_LABELS[caption.delivery]}
+      </span>
     </div>
   );
 }

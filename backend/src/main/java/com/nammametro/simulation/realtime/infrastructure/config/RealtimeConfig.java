@@ -18,6 +18,10 @@ import com.nammametro.simulation.trainsim.application.TrainSimulationControlUseC
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
@@ -37,6 +41,8 @@ import java.util.Map;
 @EnableConfigurationProperties(RealtimeProperties.class)
 public class RealtimeConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(RealtimeConfig.class);
+
     /** The authoritative server clock. Instants are zone-free; the zone is Asia/Kolkata so anything
      * that does ask this clock for local time gets IST. */
     @Bean
@@ -51,8 +57,41 @@ public class RealtimeConfig {
     }
 
     @Bean
-    public ServiceCalendar serviceCalendar(RealtimeProperties properties, MetroNetwork network) {
-        return new ServiceCalendar(toTimetable(properties.timetable(), network), network);
+    public ServiceCalendar serviceCalendar(RealtimeProperties properties, MetroNetwork network,
+                                           ResourceLoader resources, ObjectMapper objectMapper) {
+        RealtimeProperties.Timetable config = properties.timetable();
+        Timetable fromFile = Timetable.empty();
+        if (config != null && config.file() != null && !config.file().isBlank()) {
+            Resource file = resources.getResource(config.file());
+            if (file.exists()) {
+                fromFile = TimetableFileLoader.load(file, objectMapper, network);
+                log.info("Loaded operating timetable for {} from {} ({})", fromFile.lines().keySet(),
+                        config.file(), fromFile.sourceCitation());
+            } else {
+                log.warn("Timetable file {} not found; operating hours are unknown unless configured inline", config.file());
+            }
+        }
+        boolean inlineRollover = config != null && config.serviceDayRollover() != null
+                && !config.serviceDayRollover().isBlank();
+        return new ServiceCalendar(merge(fromFile, toTimetable(config, network), inlineRollover), network);
+    }
+
+    /** The file is the base; inline {@code realtime.timetable} settings add to or override it — an
+     * inline line replaces that line's file entry, holidays and exceptions are combined, and an inline
+     * source or rollover wins when set. */
+    static Timetable merge(Timetable file, Timetable inline, boolean inlineRollover) {
+        Map<String, Timetable.LineTimetable> lines = new HashMap<>(file.lines());
+        lines.putAll(inline.lines());
+        java.util.Set<java.time.LocalDate> holidays = new java.util.HashSet<>(file.holidays());
+        holidays.addAll(inline.holidays());
+        List<Timetable.ScheduleException> exceptions = new ArrayList<>(file.exceptions());
+        exceptions.addAll(inline.exceptions());
+        String source = inline.sourceCitation() != null && !inline.sourceCitation().isBlank()
+                ? (file.sourceCitation().isBlank() || inline.lines().isEmpty()
+                        ? inline.sourceCitation() : file.sourceCitation() + "; " + inline.sourceCitation())
+                : file.sourceCitation();
+        LocalTime rollover = inlineRollover ? inline.serviceDayRollover() : file.serviceDayRollover();
+        return new Timetable(source, rollover, holidays, lines, exceptions);
     }
 
     @Bean
@@ -107,11 +146,14 @@ public class RealtimeConfig {
         if (properties == null) {
             return Timetable.empty();
         }
-        int rolloverSeconds = parse(properties.serviceDayRollover(), "realtime.timetable.service-day-rollover");
-        if (rolloverSeconds >= 24 * 3600) {
-            throw new IllegalStateException("realtime.timetable.service-day-rollover must be before 24:00");
+        LocalTime rollover = null; // unset: the timetable file's (or 03:00)
+        if (properties.serviceDayRollover() != null && !properties.serviceDayRollover().isBlank()) {
+            int rolloverSeconds = parse(properties.serviceDayRollover(), "realtime.timetable.service-day-rollover");
+            if (rolloverSeconds >= 24 * 3600) {
+                throw new IllegalStateException("realtime.timetable.service-day-rollover must be before 24:00");
+            }
+            rollover = LocalTime.ofSecondOfDay(rolloverSeconds);
         }
-        LocalTime rollover = LocalTime.ofSecondOfDay(rolloverSeconds);
 
         Map<String, Timetable.LineTimetable> lines = new HashMap<>();
         if (properties.lines() != null) {
@@ -124,6 +166,7 @@ public class RealtimeConfig {
                 RealtimeProperties.LineDays days = entry.getValue();
                 Map<Timetable.DayType, List<Timetable.ServicePeriod>> periods = new EnumMap<>(Timetable.DayType.class);
                 put(periods, Timetable.DayType.WEEKDAY, days.weekday(), lineCode);
+                put(periods, Timetable.DayType.MONDAY, days.monday(), lineCode);
                 put(periods, Timetable.DayType.SATURDAY, days.saturday(), lineCode);
                 put(periods, Timetable.DayType.SUNDAY, days.sunday(), lineCode);
                 lines.put(lineCode, new Timetable.LineTimetable(periods));

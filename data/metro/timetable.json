@@ -1,0 +1,277 @@
+{
+  "source": "BMRCL official line timetables, https://english.bmrc.co.in/metro-timings/ (Purple & Green published 2025-12-24, Yellow published 2026-06-03; retrieved 2026-10-11)",
+  "notes": [
+    "Transcribed row-for-row from BMRCL's published timetable images. Each period is one table row: trains leave the terminus at 'from', then every 'headwayMinutes', and at 'to'.",
+    "Only departures from the two end termini are included. BMRCL also runs peak-hour short loops and extra trains from intermediate stations (e.g. Garudacharpalya, Mysore Road, Kempegowda, Nagasandra/Peenya Industry, Yelachenahalli); those don't change first/last train times and are not modelled here.",
+    "Termini beyond this network's modelled stations: Purple's western terminus is Challaghatta (one stop past Kengeri); Green's are Madavara (past Nagasandra) and Silk Institute (past Yelachenahalli).",
+    "'weekday' is Tuesday to Friday; Monday has its own earlier-starting timetable.",
+    "Green Saturday 'From Silk Institute' row printed as '20;57' in the source; read as 20:57.",
+    "No holiday rule is published on the timetable page, so none is configured."
+  ],
+  "serviceDayRollover": "03:00",
+  "holidays": [],
+  "lines": {
+    "PURPLE": {
+      "outbound": {
+        "terminus": "Challaghatta",
+        "monday": [
+          { "from": "04:15", "to": "04:35", "headwayMinutes": 20 },
+          { "from": "04:35", "to": "05:15", "headwayMinutes": 15 },
+          { "from": "05:15", "to": "06:54", "headwayMinutes": 11 },
+          { "from": "06:54", "to": "12:20", "headwayMinutes": 10 },
+          { "from": "12:20", "to": "16:45", "headwayMinutes": 8 },
+          { "from": "16:45", "to": "23:05", "headwayMinutes": 10 }
+        ],
+        "weekday": [
+          { "from": "05:00", "to": "05:20", "headwayMinutes": 20 },
+          { "from": "05:20", "to": "06:00", "headwayMinutes": 15 },
+          { "from": "06:00", "to": "06:54", "headwayMinutes": 11 },
+          { "from": "06:54", "to": "12:20", "headwayMinutes": 10 },
+          { "from": "12:20", "to": "16:02", "headwayMinutes": 8 },
+          { "from": "16:02", "to": "23:05", "headwayMinutes": 10 }
+        ],
+        "saturday": [
+          { "from": "05:00", "to": "05:20", "headwayMinutes": 20 },
+          { "from": "05:20", "to": "06:00", "headwayMinutes": 15 },
+          { "from": "06:00", "to": "06:54", "headwayMinutes": 11 },
+          { "from": "06:54", "to": "12:20", "headwayMinutes": 10 },
+          { "from": "12:20", "to": "16:45", "headwayMinutes": 8 },
+          { "from": "16:45", "to": "23:05", "headwayMinutes": 10 }
+        ],
+        "sunday": [
+          { "from": "07:00", "to": "07:50", "headwayMinutes": 15 },
+          { "from": "07:50", "to": "12:00", "headwayMinutes": 10 },
+          { "from": "12:00", "to": "21:28", "headwayMinutes": 8 },
+          { "from": "21:28", "to": "23:05", "headwayMinutes": 10 }
+        ]
+      },
+      "inbound": {
+        "terminus": "Whitefield",
+        "monday": [
+          { "from": "04:15", "to": "04:35", "headwayMinutes": 20 },
+          { "from": "04:35", "to": "05:00", "headwayMinutes": 13 },
+          { "from": "05:00", "to": "10:57", "headwayMinutes": 10 },
+          { "from": "10:57", "to": "15:21", "headwayMinutes": 8 },
+          { "from": "15:21", "to": "22:01", "headwayMinutes": 10 },
+          { "from": "22:01", "to": "22:45", "headwayMinutes": 15 }
+        ],
+        "weekday": [
+          { "from": "05:00", "to": "05:20", "headwayMinutes": 20 },
+          { "from": "05:20", "to": "10:57", "headwayMinutes": 10 },
+          { "from": "10:57", "to": "15:21", "headwayMinutes": 8 },
+          { "from": "15:21", "to": "22:01", "headwayMinutes": 10 },
+          { "from": "22:01", "to": "22:45", "headwayMinutes": 15 }
+        ],
+        "saturday": [
+          { "from": "05:00", "to": "05:20", "headwayMinutes": 20 },
+          { "from": "05:20", "to": "10:57", "headwayMinutes": 10 },
+          { "from": "10:57", "to": "15:21", "headwayMinutes": 8 },
+          { "from": "15:21", "to": "22:01", "headwayMinutes": 10 },
+          { "from": "22:01", "to": "22:45", "headwayMinutes": 15 }
+        ],
+        "sunday": [
+          { "from": "07:00", "to": "10:33", "headwayMinutes": 10 },
+          { "from": "10:33", "to": "20:01", "headwayMinutes": 8 },
+          { "from": "20:01", "to": "22:31", "headwayMinutes": 10 },
+          { "from": "22:31", "to": "22:45", "headwayMinutes": 14 }
+        ]
+      }
+    },
+    "GREEN": {
+      "outbound": {
+        "terminus": "Madavara",
+        "monday": [
+          { "from": "04:15", "to": "04:40", "headwayMinutes": 25 },
+          { "from": "05:00", "to": "06:15", "headwayMinutes": 15 },
+          { "from": "06:15", "to": "10:25", "headwayMinutes": 10 },
+          { "from": "10:25", "to": "10:39", "headwayMinutes": 7 },
+          { "from": "10:39", "to": "15:51", "headwayMinutes": 8 },
+          { "from": "15:51", "to": "19:44", "headwayMinutes": 10 },
+          { "from": "19:44", "to": "20:24", "headwayMinutes": 8 },
+          { "from": "20:24", "to": "22:04", "headwayMinutes": 10 },
+          { "from": "22:04", "to": "22:40", "headwayMinutes": 10 },
+          { "from": "22:40", "to": "22:57", "headwayMinutes": 15 }
+        ],
+        "weekday": [
+          { "from": "05:00", "to": "06:15", "headwayMinutes": 15 },
+          { "from": "06:15", "to": "10:25", "headwayMinutes": 11 },
+          { "from": "10:25", "to": "10:39", "headwayMinutes": 7 },
+          { "from": "10:39", "to": "15:51", "headwayMinutes": 8 },
+          { "from": "15:51", "to": "19:44", "headwayMinutes": 10 },
+          { "from": "19:44", "to": "20:24", "headwayMinutes": 8 },
+          { "from": "20:24", "to": "22:04", "headwayMinutes": 10 },
+          { "from": "22:04", "to": "22:40", "headwayMinutes": 10 },
+          { "from": "22:40", "to": "22:57", "headwayMinutes": 15 }
+        ],
+        "saturday": [
+          { "from": "05:00", "to": "06:15", "headwayMinutes": 15 },
+          { "from": "06:15", "to": "10:39", "headwayMinutes": 11 },
+          { "from": "10:39", "to": "16:01", "headwayMinutes": 8 },
+          { "from": "16:01", "to": "16:23", "headwayMinutes": 5.5 },
+          { "from": "16:23", "to": "19:52", "headwayMinutes": 11 },
+          { "from": "19:52", "to": "20:24", "headwayMinutes": 8 },
+          { "from": "20:24", "to": "22:04", "headwayMinutes": 10 },
+          { "from": "22:04", "to": "23:00", "headwayMinutes": 15 }
+        ],
+        "sunday": [
+          { "from": "07:00", "to": "10:47", "headwayMinutes": 10 },
+          { "from": "10:47", "to": "20:15", "headwayMinutes": 8 },
+          { "from": "20:15", "to": "22:05", "headwayMinutes": 10 },
+          { "from": "22:05", "to": "22:29", "headwayMinutes": 12 },
+          { "from": "22:29", "to": "23:00", "headwayMinutes": 15 }
+        ]
+      },
+      "inbound": {
+        "terminus": "Silk Institute",
+        "monday": [
+          { "from": "04:15", "to": "05:00", "headwayMinutes": 20 },
+          { "from": "05:00", "to": "07:00", "headwayMinutes": 15 },
+          { "from": "07:00", "to": "11:09", "headwayMinutes": 10 },
+          { "from": "11:09", "to": "16:48", "headwayMinutes": 8 },
+          { "from": "16:48", "to": "20:29", "headwayMinutes": 10 },
+          { "from": "20:29", "to": "21:30", "headwayMinutes": 8 },
+          { "from": "21:30", "to": "22:40", "headwayMinutes": 10 },
+          { "from": "22:40", "to": "23:05", "headwayMinutes": 12.5 }
+        ],
+        "weekday": [
+          { "from": "05:00", "to": "07:00", "headwayMinutes": 15 },
+          { "from": "07:00", "to": "11:09", "headwayMinutes": 10 },
+          { "from": "11:09", "to": "16:48", "headwayMinutes": 8 },
+          { "from": "16:48", "to": "20:29", "headwayMinutes": 10 },
+          { "from": "20:29", "to": "21:30", "headwayMinutes": 8 },
+          { "from": "21:30", "to": "22:40", "headwayMinutes": 10 },
+          { "from": "22:40", "to": "23:05", "headwayMinutes": 12.5 }
+        ],
+        "saturday": [
+          { "from": "05:00", "to": "07:00", "headwayMinutes": 15 },
+          { "from": "07:00", "to": "11:53", "headwayMinutes": 11 },
+          { "from": "11:53", "to": "16:48", "headwayMinutes": 8 },
+          { "from": "16:48", "to": "20:57", "headwayMinutes": 11 },
+          { "from": "20:57", "to": "21:30", "headwayMinutes": 8 },
+          { "from": "21:30", "to": "22:40", "headwayMinutes": 10 },
+          { "from": "22:40", "to": "23:05", "headwayMinutes": 12.5 }
+        ],
+        "sunday": [
+          { "from": "07:00", "to": "07:58", "headwayMinutes": 15 },
+          { "from": "07:58", "to": "12:08", "headwayMinutes": 10 },
+          { "from": "12:08", "to": "21:44", "headwayMinutes": 8 },
+          { "from": "21:44", "to": "22:44", "headwayMinutes": 10 },
+          { "from": "22:44", "to": "23:05", "headwayMinutes": 12 }
+        ]
+      }
+    },
+    "YELLOW": {
+      "outbound": {
+        "terminus": "RV Road",
+        "monday": [
+          { "from": "05:05", "to": "05:35", "headwayMinutes": 30 },
+          { "from": "05:35", "to": "06:00", "headwayMinutes": 25 },
+          { "from": "06:00", "to": "06:40", "headwayMinutes": 20 },
+          { "from": "06:40", "to": "06:56", "headwayMinutes": 16 },
+          { "from": "06:56", "to": "07:07", "headwayMinutes": 11 },
+          { "from": "07:07", "to": "08:27", "headwayMinutes": 10 },
+          { "from": "08:27", "to": "09:15", "headwayMinutes": 8 },
+          { "from": "09:15", "to": "09:29", "headwayMinutes": 7 },
+          { "from": "09:29", "to": "10:47", "headwayMinutes": 6 },
+          { "from": "10:47", "to": "10:55", "headwayMinutes": 8 },
+          { "from": "10:55", "to": "11:04", "headwayMinutes": 9 },
+          { "from": "11:04", "to": "16:34", "headwayMinutes": 10 },
+          { "from": "16:34", "to": "16:41", "headwayMinutes": 7 },
+          { "from": "16:41", "to": "20:11", "headwayMinutes": 6 },
+          { "from": "20:11", "to": "21:07", "headwayMinutes": 8 },
+          { "from": "21:07", "to": "21:57", "headwayMinutes": 10 },
+          { "from": "21:57", "to": "22:10", "headwayMinutes": 13 },
+          { "from": "22:10", "to": "22:40", "headwayMinutes": 15 },
+          { "from": "22:40", "to": "23:55", "headwayMinutes": 25 }
+        ],
+        "weekday": [
+          { "from": "06:00", "to": "06:40", "headwayMinutes": 20 },
+          { "from": "06:40", "to": "06:56", "headwayMinutes": 16 },
+          { "from": "06:56", "to": "07:07", "headwayMinutes": 11 },
+          { "from": "07:07", "to": "08:27", "headwayMinutes": 10 },
+          { "from": "08:27", "to": "09:15", "headwayMinutes": 8 },
+          { "from": "09:15", "to": "09:29", "headwayMinutes": 7 },
+          { "from": "09:29", "to": "10:47", "headwayMinutes": 6 },
+          { "from": "10:47", "to": "10:55", "headwayMinutes": 8 },
+          { "from": "10:55", "to": "11:04", "headwayMinutes": 9 },
+          { "from": "11:04", "to": "16:34", "headwayMinutes": 10 },
+          { "from": "16:34", "to": "16:41", "headwayMinutes": 7 },
+          { "from": "16:41", "to": "20:11", "headwayMinutes": 6 },
+          { "from": "20:11", "to": "21:07", "headwayMinutes": 8 },
+          { "from": "21:07", "to": "21:57", "headwayMinutes": 10 },
+          { "from": "21:57", "to": "22:10", "headwayMinutes": 13 },
+          { "from": "22:10", "to": "22:40", "headwayMinutes": 15 },
+          { "from": "22:40", "to": "23:55", "headwayMinutes": 25 }
+        ],
+        "saturday": [
+          { "from": "06:00", "to": "06:25", "headwayMinutes": 20 },
+          { "from": "06:25", "to": "07:05", "headwayMinutes": 20 },
+          { "from": "07:05", "to": "07:20", "headwayMinutes": 15 },
+          { "from": "07:20", "to": "07:31", "headwayMinutes": 11 },
+          { "from": "07:31", "to": "20:31", "headwayMinutes": 10 },
+          { "from": "20:31", "to": "22:07", "headwayMinutes": 12 },
+          { "from": "22:07", "to": "22:25", "headwayMinutes": 18 },
+          { "from": "22:25", "to": "23:05", "headwayMinutes": 20 },
+          { "from": "23:05", "to": "23:55", "headwayMinutes": 25 }
+        ],
+        "sunday": [
+          { "from": "07:00", "to": "08:48", "headwayMinutes": 18 },
+          { "from": "08:48", "to": "09:58", "headwayMinutes": 14 },
+          { "from": "09:58", "to": "10:46", "headwayMinutes": 12 },
+          { "from": "10:46", "to": "20:56", "headwayMinutes": 10 },
+          { "from": "20:56", "to": "22:20", "headwayMinutes": 12 },
+          { "from": "22:20", "to": "22:50", "headwayMinutes": 15 },
+          { "from": "22:50", "to": "23:30", "headwayMinutes": 20 },
+          { "from": "23:30", "to": "23:55", "headwayMinutes": 25 }
+        ]
+      },
+      "inbound": {
+        "terminus": "Bommasandra",
+        "monday": [
+          { "from": "05:05", "to": "05:35", "headwayMinutes": 30 },
+          { "from": "05:35", "to": "06:00", "headwayMinutes": 20 },
+          { "from": "06:00", "to": "06:20", "headwayMinutes": 20 },
+          { "from": "06:20", "to": "07:50", "headwayMinutes": 10 },
+          { "from": "07:50", "to": "08:38", "headwayMinutes": 8 },
+          { "from": "08:38", "to": "08:52", "headwayMinutes": 7 },
+          { "from": "08:52", "to": "10:10", "headwayMinutes": 6 },
+          { "from": "10:10", "to": "10:18", "headwayMinutes": 8 },
+          { "from": "10:18", "to": "15:58", "headwayMinutes": 10 },
+          { "from": "15:58", "to": "19:34", "headwayMinutes": 6 },
+          { "from": "19:34", "to": "20:30", "headwayMinutes": 8 },
+          { "from": "20:30", "to": "21:30", "headwayMinutes": 10 },
+          { "from": "21:30", "to": "22:42", "headwayMinutes": 12 }
+        ],
+        "weekday": [
+          { "from": "06:00", "to": "06:20", "headwayMinutes": 20 },
+          { "from": "06:20", "to": "07:50", "headwayMinutes": 10 },
+          { "from": "07:50", "to": "08:38", "headwayMinutes": 8 },
+          { "from": "08:38", "to": "08:52", "headwayMinutes": 7 },
+          { "from": "08:52", "to": "10:10", "headwayMinutes": 6 },
+          { "from": "10:10", "to": "10:18", "headwayMinutes": 8 },
+          { "from": "10:18", "to": "15:58", "headwayMinutes": 10 },
+          { "from": "15:58", "to": "19:34", "headwayMinutes": 6 },
+          { "from": "19:34", "to": "20:30", "headwayMinutes": 8 },
+          { "from": "20:30", "to": "21:30", "headwayMinutes": 10 },
+          { "from": "21:30", "to": "22:42", "headwayMinutes": 12 }
+        ],
+        "saturday": [
+          { "from": "06:00", "to": "06:40", "headwayMinutes": 20 },
+          { "from": "06:40", "to": "06:55", "headwayMinutes": 15 },
+          { "from": "06:55", "to": "19:55", "headwayMinutes": 10 },
+          { "from": "19:55", "to": "22:31", "headwayMinutes": 12 },
+          { "from": "22:31", "to": "22:42", "headwayMinutes": 11 }
+        ],
+        "sunday": [
+          { "from": "07:00", "to": "08:12", "headwayMinutes": 18 },
+          { "from": "08:12", "to": "09:08", "headwayMinutes": 14 },
+          { "from": "09:08", "to": "10:20", "headwayMinutes": 12 },
+          { "from": "10:20", "to": "20:20", "headwayMinutes": 10 },
+          { "from": "20:20", "to": "22:32", "headwayMinutes": 12 },
+          { "from": "22:32", "to": "22:42", "headwayMinutes": 10 }
+        ]
+      }
+    }
+  },
+  "exceptions": []
+}

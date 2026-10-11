@@ -10,9 +10,10 @@
  *
  * Coverage (documented, not silently partial — see the spec's "no silent caps" principle): one
  * representative OUTBOUND announcement per station per line it serves, platform 1, for every
- * spoken (non-`LOW`-priority) `AnnouncementType`, in all three languages — plus all six
- * `SERVICE_DISRUPTION` disruption types, which don't vary by station (see `templates/*.ts`: none
- * of them reference `stationName`). NOT pre-warmed: INBOUND-direction phrasing, platform numbers
+ * spoken (non-`CHIME_ONLY_TYPES`) `AnnouncementType`, in all three languages — plus all six
+ * `SERVICE_DISRUPTION` disruption types and the generic alert-driven `SERVICE_DISRUPTION`/
+ * `EMERGENCY` sentences, none of which vary by station (see `templates/*.ts`: none of them
+ * reference `stationName`). An alert's own English header text can't be known ahead of time. NOT pre-warmed: INBOUND-direction phrasing, platform numbers
  * other than 1, TRANSFER at non-interchange stations, and arbitrary `DELAY` minute counts beyond
  * the one representative value used here — each of those synthesizes once on its first real
  * occurrence and self-caches from then on (see `AnnouncementAudioService`'s cache-on-miss design),
@@ -34,7 +35,7 @@ const CONCURRENCY = 4;
 
 const LANGUAGES: readonly LanguageCode[] = ["en", "hi", "kn"];
 
-/** Every `AnnouncementType` `AnnouncementQueue` will actually speak — `LOW`-priority types
+/** Every train `AnnouncementType` `AnnouncementQueue` will actually speak — `CHIME_ONLY_TYPES`
  * (`TRAIN_ARRIVING`, `TRAIN_AT_PLATFORM`, `DOORS_OPENING`, `DOORS_CLOSING`) never reach a
  * `VoiceProvider` at all (chime-only by design), so warming their audio would be pure waste. */
 const STATION_ANNOUNCEMENT_TYPES: readonly AnnouncementType[] = [
@@ -168,6 +169,14 @@ function buildJobs(network: NetworkResponse): Array<{ text: string; language: La
     const data = disruptionAnnouncementData(type);
     for (const language of LANGUAGES) {
       jobs.push({ text: buildAnnouncementText("SERVICE_DISRUPTION", data, language), language });
+    }
+  }
+
+  // Alert-driven announcements with no header text: the generic sentence in every language.
+  const genericAlert: AnnouncementData = { ...disruptionAnnouncementData("CUSTOM_DELAY"), disruptionType: null };
+  for (const type of ["SERVICE_DISRUPTION", "EMERGENCY"] as const) {
+    for (const language of LANGUAGES) {
+      jobs.push({ text: buildAnnouncementText(type, genericAlert, language), language });
     }
   }
 

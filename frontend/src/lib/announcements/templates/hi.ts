@@ -48,6 +48,8 @@ export function buildHindiText(type: AnnouncementType, d: ResolvedAnnouncementDa
       return `यहाँ ${joinNatural(d.transferLines)} के लिए इंटरचेंज उपलब्ध है।`;
     case "DELAY":
       return `इस सेवा में लगभग ${d.delayMinutes} मिनट की देरी के लिए हमें खेद है। कृपया धैर्य बनाए रखें।`;
+    case "EMERGENCY":
+      return "कृपया ध्यान दें। यह एक आपातकालीन सूचना है। कृपया शांत रहें और मेट्रो कर्मचारियों के निर्देशों का पालन करें।";
     case "SERVICE_DISRUPTION": {
       const cause = d.disruptionType ? disruptionTypeTemplates[d.disruptionType] : "इस लाइन पर सेवा बाधित है";
       return `कृपया ध्यान दें। ${cause}। कृपया स्टेशन कर्मचारियों के निर्देशों का पालन करें।`;

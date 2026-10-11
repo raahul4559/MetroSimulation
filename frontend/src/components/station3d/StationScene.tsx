@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import type { Line, Station } from "@/domain/metro";
 import type { Disruption, Passenger, TrainState } from "@/domain/trainsim";
+import type { RealtimeAlert } from "@/domain/realtime";
 import type { CameraMode3D } from "@/domain/station3d";
 import { buildStationLayout3D } from "@/lib/station3d/layout";
 import { findUpcomingTrainCode, selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
@@ -22,6 +23,9 @@ import { audioManager } from "@/lib/audio/AudioManager";
 import { announcementService, type AnnouncementCaption } from "@/lib/announcements/AnnouncementService";
 import { TrainMotionProvider, useOptionalTrainMotion } from "@/providers/SimulationProvider";
 
+const NO_DISRUPTIONS: readonly Disruption[] = [];
+const NO_ALERTS: readonly RealtimeAlert[] = [];
+
 interface StationSceneProps {
   station: Station;
   lines: readonly Line[];
@@ -29,6 +33,8 @@ interface StationSceneProps {
   trains: readonly TrainState[];
   passengers: readonly Passenger[];
   disruptions?: readonly Disruption[];
+  /** The canonical frame's active realtime alerts — announced when one first appears. */
+  alerts?: readonly RealtimeAlert[];
   /** HH:MM:SS of the state on screen — simulated time, or server time in IST. */
   clockTime: string;
   onBack: () => void;
@@ -61,7 +67,8 @@ export function StationScene({
   stations,
   trains,
   passengers,
-  disruptions = [],
+  disruptions = NO_DISRUPTIONS,
+  alerts = NO_ALERTS,
   clockTime,
   onBack,
   onReady,
@@ -114,7 +121,8 @@ export function StationScene({
   const { latest: latestAnnouncement, consume: consumeAnnouncement } = useStationAnnouncements(
     layout,
     trainVisuals,
-    disruptions
+    disruptions,
+    alerts
   );
 
   // Every real announcement event this station fires is handed to `AnnouncementService` (which

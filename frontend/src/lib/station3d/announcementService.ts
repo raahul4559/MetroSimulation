@@ -2,6 +2,7 @@ import type { PlatformLayout3D, StationLayout3D, TrainPhase3D, TrainVisual3D } f
 import type { AnnouncementData, AnnouncementEvent, AnnouncementType } from "@/domain/announcement";
 import { ANNOUNCEMENT_PRIORITY } from "@/domain/announcement";
 import type { Disruption } from "@/domain/trainsim";
+import type { RealtimeAlert } from "@/domain/realtime";
 
 /** A train arriving with at least this much accumulated delay gets a spoken `DELAY` announcement on
  * top of its normal arrival sequence — short, routine delays aren't worth narrating and would just
@@ -9,7 +10,7 @@ import type { Disruption } from "@/domain/trainsim";
 const DELAY_ANNOUNCEMENT_THRESHOLD_SECONDS = 90;
 
 /**
- * Turns real `TrainPhase3D` transitions (plus real delay/interchange/disruption facts) into the
+ * Turns real `TrainPhase3D` transitions (plus real delay/interchange facts) into the
  * `AnnouncementEvent`s those transitions imply — the single source of announcement events for the 3D
  * station, so nothing in `StationScene` ever decides on its own that "now would be a good time to
  * announce something." Compares this tick's `current` visuals against `previous`'s last-seen
@@ -145,31 +146,85 @@ export function deriveDisruptionAnnouncements(
 
   for (const disruption of relevant) {
     if (previousActiveIds.has(disruption.id)) continue;
-    sequence += 1;
-    events.push({
-      id: `disruption-${disruption.id}-${sequence}`,
-      type: "SERVICE_DISRUPTION",
-      priority: ANNOUNCEMENT_PRIORITY.SERVICE_DISRUPTION,
-      trainId: null,
-      data: {
-        stationCode: station.code,
-        stationName: station.name,
-        platform: null,
-        lineCode: "",
-        lineName: "",
-        destinationStationCode: null,
-        destinationStationName: "",
-        nextStationCode: null,
-        nextStationName: null,
-        trainNumber: "",
-        direction: "OUTBOUND",
-        delaySeconds: 0,
-        transferLines: null,
+    events.push(
+      makeStationEvent("SERVICE_DISRUPTION", `disruption-${disruption.id}`, station, null, {
         disruptionDescription: disruption.description || null,
         disruptionType: disruption.type,
-      },
-    });
+      })
+    );
   }
 
   return { events, activeIds };
+}
+
+/** GTFS-Realtime causes that make a severe alert an emergency rather than a service problem. */
+const EMERGENCY_CAUSES: ReadonlySet<string> = new Set(["ACCIDENT", "POLICE_ACTIVITY", "MEDICAL_EMERGENCY"]);
+
+/**
+ * Turns the canonical frame's realtime alerts (already filtered to active ones by the backend) into
+ * station announcements — once, on the edge where an alert first appears, never re-announced while
+ * it stays active and never for an alert already active when this station was opened.
+ *
+ * <p>An alert concerns this station when it names the station, or names one of the station's lines
+ * without naming specific stations. A `SEVERE` alert whose cause is an accident, police activity or
+ * a medical emergency is an `EMERGENCY`; every other relevant alert is a `SERVICE_DISRUPTION`. The
+ * feed's own header (English) is what English speaks; Hindi/Kannada speak their generic sentence.
+ */
+export function deriveAlertAnnouncements(
+  station: StationLayout3D,
+  alerts: readonly RealtimeAlert[],
+  previousIds: ReadonlySet<string>
+): { events: readonly AnnouncementEvent[]; activeIds: ReadonlySet<string> } {
+  const stationLines = new Map(station.platforms.map((p) => [p.lineCode, p] as const));
+  const relevant = alerts.filter((a) =>
+    a.stationIds.length > 0 ? a.stationIds.includes(station.stationId) : a.lineCodes.some((c) => stationLines.has(c))
+  );
+  const activeIds = new Set(relevant.map((a) => a.id));
+  const events: AnnouncementEvent[] = [];
+
+  for (const alert of relevant) {
+    if (previousIds.has(alert.id)) continue;
+    const emergency = alert.severity === "SEVERE" && alert.cause != null && EMERGENCY_CAUSES.has(alert.cause);
+    const platform = alert.lineCodes.map((c) => stationLines.get(c)).find((p) => p != null) ?? null;
+    events.push(
+      makeStationEvent(emergency ? "EMERGENCY" : "SERVICE_DISRUPTION", `alert-${alert.id}`, station, platform, {
+        disruptionDescription: alert.headerText?.trim() || alert.descriptionText?.trim() || null,
+        disruptionType: null,
+      })
+    );
+  }
+
+  return { events, activeIds };
+}
+
+function makeStationEvent(
+  type: "SERVICE_DISRUPTION" | "EMERGENCY",
+  idPrefix: string,
+  station: StationLayout3D,
+  platform: PlatformLayout3D | null,
+  extra: Pick<AnnouncementData, "disruptionDescription" | "disruptionType">
+): AnnouncementEvent {
+  sequence += 1;
+  return {
+    id: `${idPrefix}-${sequence}`,
+    type,
+    priority: ANNOUNCEMENT_PRIORITY[type],
+    trainId: null,
+    data: {
+      stationCode: station.code,
+      stationName: station.name,
+      platform: platform?.platformNumber ?? null,
+      lineCode: platform?.lineCode ?? "",
+      lineName: platform?.lineName ?? "",
+      destinationStationCode: null,
+      destinationStationName: "",
+      nextStationCode: null,
+      nextStationName: null,
+      trainNumber: "",
+      direction: "OUTBOUND",
+      delaySeconds: 0,
+      transferLines: null,
+      ...extra,
+    },
+  };
 }

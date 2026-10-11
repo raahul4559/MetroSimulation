@@ -115,11 +115,13 @@ public class ScheduleProvider implements MetroRealtimeProvider {
                 continue; // a timetabled line this network doesn't model
             }
             // Exceptions applied: a closed day has no departures, special hours replace the regular ones.
-            List<Integer> departures = calendar.scheduleFor(lineCode, serviceDay).departures();
+            ServiceCalendar.DaySchedule schedule = calendar.scheduleFor(lineCode, serviceDay);
             for (RouteTimings timings : byDirection.values()) {
                 if (timings.stops().size() < 2) {
                     continue;
                 }
+                // Each terminus runs its own timetable (different first/last trains and headways).
+                List<Integer> departures = schedule.departures(timings.direction());
                 int originDwell = Math.max(0, timings.stops().getFirst().station().dwellTimeSeconds());
                 for (int departure : departures) {
                     long elapsed = secondsIntoDay - departure;

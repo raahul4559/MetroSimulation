@@ -63,54 +63,79 @@ public final class ServiceCalendar {
         if (timetable.holidays().contains(serviceDay) || serviceDay.getDayOfWeek() == DayOfWeek.SUNDAY) {
             return DayType.SUNDAY;
         }
-        return serviceDay.getDayOfWeek() == DayOfWeek.SATURDAY ? DayType.SATURDAY : DayType.WEEKDAY;
+        return switch (serviceDay.getDayOfWeek()) {
+            case SATURDAY -> DayType.SATURDAY;
+            case MONDAY -> DayType.MONDAY;
+            default -> DayType.WEEKDAY;
+        };
     }
 
     /**
-     * One line's resolved timetable for one service day, exceptions applied. {@code departures} are
-     * every timetabled departure from each terminus, seconds into the service day, ascending;
-     * empty when the line is closed that day or nothing is configured.
+     * One line's resolved timetable for one service day, exceptions applied.
+     * {@code departuresByDirection} are each terminus's timetabled departures, seconds into the
+     * service day, ascending; {@code departures} is both directions merged. Empty when the line is
+     * closed that day or nothing is configured.
      */
-    public record DaySchedule(LocalDate serviceDay, DayType dayType, List<Integer> departures, boolean closed,
+    public record DaySchedule(LocalDate serviceDay, DayType dayType,
+                              Map<TrainDirection, List<Integer>> departuresByDirection, boolean closed,
                               List<String> exceptionNotes) {
 
         public DaySchedule {
-            departures = List.copyOf(departures);
+            departuresByDirection = Map.copyOf(departuresByDirection);
             exceptionNotes = List.copyOf(exceptionNotes);
         }
 
+        public List<Integer> departures() {
+            TreeSet<Integer> all = new TreeSet<>();
+            departuresByDirection.values().forEach(all::addAll);
+            return List.copyOf(all);
+        }
+
+        public List<Integer> departures(TrainDirection direction) {
+            return departuresByDirection.getOrDefault(direction, List.of());
+        }
+
         public boolean hasService() {
-            return !closed && !departures.isEmpty();
+            return !closed && departuresByDirection.values().stream().anyMatch(d -> !d.isEmpty());
         }
     }
 
     public DaySchedule scheduleFor(String lineCode, LocalDate serviceDay) {
         DayType dayType = dayType(serviceDay);
         Timetable.LineTimetable lineTimetable = timetable.lines().get(lineCode);
-        List<ServicePeriod> periods = lineTimetable == null ? List.of() : lineTimetable.periodsFor(dayType);
+        List<ServicePeriod> specialHours = null;
         boolean closed = false;
         List<String> notes = new ArrayList<>();
         for (ScheduleException exception : timetable.exceptionsFor(serviceDay, lineCode)) {
             switch (exception.kind()) {
-                case CLOSED -> {
-                    closed = true;
-                    periods = List.of();
-                }
-                case SPECIAL_HOURS -> periods = exception.periods();
-                case RUN_AS -> {
-                    dayType = exception.runAs();
-                    periods = lineTimetable == null ? List.of() : lineTimetable.periodsFor(dayType);
-                }
+                case CLOSED -> closed = true;
+                case SPECIAL_HOURS -> specialHours = exception.periods();
+                case RUN_AS -> dayType = exception.runAs();
             }
             notes.add(describe(exception));
         }
+
+        Map<TrainDirection, List<Integer>> byDirection = new java.util.EnumMap<>(TrainDirection.class);
+        for (TrainDirection direction : TrainDirection.values()) {
+            List<ServicePeriod> periods = closed ? List.of()
+                    : specialHours != null ? specialHours
+                    : lineTimetable == null ? List.of()
+                    : lineTimetable.periodsFor(dayType, direction);
+            byDirection.put(direction, expand(periods));
+        }
+        return new DaySchedule(serviceDay, dayType, byDirection, closed, notes);
+    }
+
+    /** Every departure in {@code periods}: each row's start, every headway after it, and its end. */
+    static List<Integer> expand(List<ServicePeriod> periods) {
         TreeSet<Integer> departures = new TreeSet<>();
         for (ServicePeriod period : periods) {
             for (int t = period.fromSeconds(); t <= period.toSeconds(); t += period.headwaySeconds()) {
                 departures.add(t);
             }
+            departures.add(period.toSeconds());
         }
-        return new DaySchedule(serviceDay, dayType, List.copyOf(departures), closed, notes);
+        return List.copyOf(departures);
     }
 
     public LineOperatingStatus statusFor(String lineCode, Instant now) {

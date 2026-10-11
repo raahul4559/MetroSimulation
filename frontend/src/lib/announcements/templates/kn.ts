@@ -48,6 +48,8 @@ export function buildKannadaText(type: AnnouncementType, d: ResolvedAnnouncement
       return `ಇಲ್ಲಿ ${joinNatural(d.transferLines)} ಗೆ ಇಂಟರ್‌ಚೇಂಜ್ ಲಭ್ಯವಿದೆ.`;
     case "DELAY":
       return `ಈ ಸೇವೆಯಲ್ಲಿ ಸುಮಾರು ${d.delayMinutes} ನಿಮಿಷ ವಿಳಂಬವಾಗಿರುವುದಕ್ಕೆ ವಿಷಾದಿಸುತ್ತೇವೆ. ದಯವಿಟ್ಟು ಸಹಕರಿಸಿ.`;
+    case "EMERGENCY":
+      return "ದಯವಿಟ್ಟು ಗಮನಿಸಿ. ಇದು ತುರ್ತು ಪ್ರಕಟಣೆ. ದಯವಿಟ್ಟು ಶಾಂತವಾಗಿರಿ ಮತ್ತು ಮೆಟ್ರೋ ಸಿಬ್ಬಂದಿಯ ಸೂಚನೆಗಳನ್ನು ಪಾಲಿಸಿ.";
     case "SERVICE_DISRUPTION": {
       const cause = d.disruptionType ? disruptionTypeTemplates[d.disruptionType] : "ಈ ಮಾರ್ಗದಲ್ಲಿ ಸೇವಾ ವ್ಯತ್ಯಯ ಉಂಟಾಗಿದೆ";
       return `ಗಮನಿಸಿ. ${cause}. ದಯವಿಟ್ಟು ನಿಲ್ದಾಣ ಸಿಬ್ಬಂದಿಯ ಸೂಚನೆಗಳನ್ನು ಅನುಸರಿಸಿ.`;

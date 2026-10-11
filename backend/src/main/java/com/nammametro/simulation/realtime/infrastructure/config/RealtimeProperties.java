@@ -64,8 +64,9 @@ public record RealtimeProperties(
      * BMRCL notice and cite it in {@code source}.
      */
     public record Timetable(
+            @DefaultValue("classpath:metro-data/timetable.json") String file,
             @DefaultValue("") String source,
-            @DefaultValue("03:00") String serviceDayRollover,
+            @DefaultValue("") String serviceDayRollover,
             List<LocalDate> holidays,
             Map<String, LineDays> lines,
             List<Exception> exceptions
@@ -87,7 +88,7 @@ public record RealtimeProperties(
     ) {
     }
 
-    public record LineDays(List<Period> weekday, List<Period> saturday, List<Period> sunday) {
+    public record LineDays(List<Period> weekday, List<Period> monday, List<Period> saturday, List<Period> sunday) {
     }
 
     /** {@code from}/{@code to} are IST "HH:mm" (hours past 24 allowed for after-midnight service). */

@@ -14,6 +14,7 @@ import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { Surface } from "@/components/ui/Surface";
 import { useAudioSettings } from "@/hooks/useAudioSettings";
 import { AudioSettingsControls } from "@/components/layout/AudioSettingsControls";
+import { useSimulationData } from "@/providers/SimulationProvider";
 import { AnnouncementIndicator } from "./AnnouncementIndicator";
 import { CameraControls } from "./CameraControls";
 import { ReferencePanel } from "./ReferencePanel";
@@ -83,6 +84,8 @@ export function Station3DOverlay({
   alightingCount,
   hidden = false,
 }: Station3DOverlayProps) {
+  // Server-derived provenance: "Live" only for a fresh observed feed, never for the simulation.
+  const { feed } = useSimulationData();
   const [audioOpen, setAudioOpen] = useState(false);
   const [referenceOpen, setReferenceOpen] = useState(false);
   const [audioSettings] = useAudioSettings();
@@ -117,7 +120,9 @@ export function Station3DOverlay({
           </div>
           {platformLabel && <p className="mt-0.5 truncate text-[11px] text-secondary">{platformLabel}</p>}
           <div className="mt-2 flex items-center gap-2">
-            <StatusIndicator label="Live" tone="positive" />
+            <span title={feed.detail}>
+              <StatusIndicator label={feed.label} tone={feed.tone} />
+            </span>
             <span className="text-[10px] uppercase tracking-wider text-muted">
               {config.buildType.replace("_", " ")}
               {config.isInterchange ? " · Interchange" : ""}

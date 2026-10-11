@@ -16,7 +16,7 @@ them, and never label a synthesized file as an authentic recording.
 | `doors/close.mp3` | Door-closing chime |
 | `trains/rumble.mp3` | Train approach/departure movement sound |
 | `ambience/` | Reserved for a future station ambience loop (currently always synthesized) |
-| `announcements/` | Unused by design — see below |
+| `announcements/manifest.json` | Licensed real recordings of fixed announcement phrases — see below |
 
 Adding a file at one of the `doors`/`trains` paths above is picked up automatically — no
 code change needed, `AudioManager` fetches it once, caches the decoded buffer, and prefers
@@ -24,24 +24,52 @@ it over the synthesized fallback.
 
 ## Spoken announcements
 
-`announcements/` stays empty on purpose — spoken PA clips are **not** static files shipped in
-this repo. They're synthesized once (Google Cloud TTS), processed to sound like they're coming
-through a station PA system, and cached — but the cache lives on the **backend**
-(`backend/.../announcement/`, disk cache under `ANNOUNCEMENT_AUDIO_CACHE_DIR`), served over HTTP
-at `POST /api/announcements/audio`, and mirrored client-side in the browser's own `Cache Storage`
-(see `frontend/src/lib/audio/VoiceProvider.ts`'s `CachedAudioVoiceProvider`). Keeping one cache
-(backend disk + manifest) instead of also duplicating clips into this static folder avoids two
-copies of the same audio silently drifting out of sync with each other.
+Announcements are event-driven: `lib/station3d/announcementService.ts` detects them from the
+canonical realtime frame (train phase edges, delays, injected disruptions, realtime alerts) —
+nothing is announced from a timer. Each event is queued by priority
+(`EMERGENCY > SAFETY > SERVICE_DISRUPTION > TRAIN_APPROACHING > TRAIN_ARRIVING > TRAIN_DEPARTING >
+NEXT_STATION > GENERAL_INFORMATION`) and spoken through the best voice tier available for that
+exact sentence:
 
-`frontend/src/lib/announcements/AnnouncementService.ts` builds the text to speak from natural
-per-language templates (`lib/announcements/templates/`) and real network data — never a literal
-runtime translation of English. `VoiceProvider.ts`'s `CachedAudioVoiceProvider` is what turns that
-text into the cached, processed clip; it falls back to the browser's own Speech Synthesis API
-(the previous, more robotic-sounding default) whenever the backend has no credentials configured,
-is unreachable, or synthesis otherwise fails — never breaking the announcement, only its voice
-quality. See `docs/architecture.md` for the full pipeline and `npm run preload-audio` to warm the
-backend's cache ahead of time for the common phrases.
+1. **Recording** — a real clip listed in `announcements/manifest.json` (below).
+2. **Synthetic voice** — a Google Cloud TTS clip, synthesized once, PA-processed and cached on the
+   backend (`ANNOUNCEMENT_AUDIO_CACHE_DIR`), mirrored in the browser's Cache Storage. Warm it ahead
+   of time with `npm run preload-audio`.
+3. **Browser voice** — the browser's own speech engine, only if it has a voice for that language.
+4. **Text only** — the caption stays on screen long enough to read.
 
-Every synthesized clip's provenance (source, voice, license note, generation timestamp) is
-queryable at `GET /api/announcements/audio/manifest` — there is no legally reusable real Namma
-Metro/BMRCL recording behind any of this, and that stays visible rather than only true in code.
+The caption always says which tier played. Synthetic and browser voices are never presented as real
+Namma Metro audio; per-clip TTS provenance is at `GET /api/announcements/audio/manifest`.
+
+### Adding a real recording
+
+`announcements/manifest.json` ships with no clips: no legally reusable Namma Metro/BMRCL recording
+is known. Do not add a capture of the real PA unless you hold the rights. A clip is only used if its
+entry passes `lib/audio/recordedClips.ts`'s validation; invalid entries are skipped with a console
+warning:
+
+```json
+{
+  "clips": [
+    {
+      "id": "en-stand-clear",
+      "language": "en",
+      "text": "Please stand clear of the doors.",
+      "file": "/audio/announcements/en/stand-clear.ogg",
+      "attribution": "Recorded by …",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "sourceUrl": "https://…",
+      "official": false
+    }
+  ]
+}
+```
+
+- `license` must be one of `CC0-1.0`, `PDM-1.0`, `CC-BY-3.0`, `CC-BY-4.0`, `CC-BY-SA-3.0`,
+  `CC-BY-SA-4.0`, or `OWN-RECORDING` (the project's own voice recording; `sourceUrl` optional).
+- `text` must match the sentence the templates produce for that language exactly (case, spacing and
+  final punctuation are ignored). Recordings only replace fixed phrases, never sentences with a
+  station or destination name in them.
+- `official: true` is only accepted with an `officialPermission` field naming BMRCL's grant. Without
+  it, the clip is labelled "not official BMRCL audio".

@@ -47,8 +47,12 @@ export function buildEnglishText(type: AnnouncementType, d: ResolvedAnnouncement
       return `Interchange available here for ${joinNatural(d.transferLines)}.`;
     case "DELAY":
       return `We regret the delay of approximately ${d.delayMinutes} minute${d.delayMinutes === 1 ? "" : "s"} to this service. Thank you for your patience.`;
+    case "EMERGENCY": {
+      const detail = d.disruptionDescription ? ` ${sentence(d.disruptionDescription)}` : "";
+      return `Attention please. This is an emergency announcement.${detail} Please stay calm and follow the instructions of metro staff.`;
+    }
     case "SERVICE_DISRUPTION": {
-      const cause = d.disruptionDescription ?? disruptionCauseSentence(d.disruptionType);
+      const cause = d.disruptionDescription ? sentence(d.disruptionDescription) : disruptionCauseSentence(d.disruptionType);
       return `Attention please. ${cause} Please follow instructions from station staff.`;
     }
   }
@@ -66,4 +70,10 @@ function joinNatural(items: readonly string[] | null): string {
 function disruptionCauseSentence(type: DisruptionType | null): string {
   const clause = type ? disruptionTypeTemplates[type] : "there is a service disruption on this line";
   return `${clause[0]!.toUpperCase()}${clause.slice(1)}.`;
+}
+
+/** Feed/operator free text, made to end like a sentence so the next one doesn't run into it. */
+function sentence(text: string): string {
+  const trimmed = text.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
