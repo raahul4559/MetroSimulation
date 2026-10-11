@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { TrainState } from "@/domain/trainsim";
 import { Metric } from "@/components/ui/Metric";
 import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
+import { delayStats, isLate } from "@/lib/metro/trainDisplay";
 import type { Tone } from "@/lib/ui/tone";
 
 interface DelayAnalyticsPanelProps {
@@ -32,11 +33,13 @@ function maxDelayTone(seconds: number): Tone {
  * the same numbers, for API completeness/testing). */
 export function DelayAnalyticsPanel({ trains, columns = 2 }: DelayAnalyticsPanelProps) {
   const tiles = useMemo<readonly Tile[]>(() => {
-    const affected = trains.filter((t) => t.delaySeconds > 0);
-    const totalDelay = trains.reduce((sum, t) => sum + t.delaySeconds, 0);
-    const avgDelay = trains.length === 0 ? 0 : totalDelay / trains.length;
-    const maxDelay = trains.reduce((max, t) => Math.max(max, t.delaySeconds), 0);
-    const affectedPassengers = affected.reduce((sum, t) => sum + t.passengerCount, 0);
+    // Only trains whose source reports a delay count; an unknown delay is neither late nor on time.
+    const stats = delayStats(trains);
+    const affected = trains.filter(isLate);
+    const totalDelay = stats.totalDelaySeconds;
+    const avgDelay = stats.knownCount === 0 ? 0 : totalDelay / stats.knownCount;
+    const maxDelay = stats.maxDelaySeconds;
+    const affectedPassengers = affected.reduce((sum, t) => sum + (t.passengerCount ?? 0), 0);
 
     return [
       { label: "Total delay", value: formatDurationSeconds(totalDelay), tone: "neutral" },

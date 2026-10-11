@@ -12,6 +12,7 @@ import {
 } from "@/lib/metro/passengerDisplay";
 import { formatEta, getStationArrivals } from "@/lib/metro/stationArrivals";
 import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
+import { delayStats, formatDelay, isLate } from "@/lib/metro/trainDisplay";
 import { lineVividColor } from "@/lib/ui/lineColor";
 import { cn } from "@/lib/ui/cn";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -63,10 +64,9 @@ export function StationPanel({
 
   const next = arrivals[0];
   const upcoming = arrivals.slice(1, 4);
+  const arrivalDelays = delayStats(arrivals.map((a) => a.train));
   const avgDelay =
-    arrivals.length > 0
-      ? Math.round(arrivals.reduce((sum, a) => sum + a.train.delaySeconds, 0) / arrivals.length)
-      : 0;
+    arrivalDelays.knownCount > 0 ? Math.round(arrivalDelays.totalDelaySeconds / arrivalDelays.knownCount) : 0;
 
   return (
     <BottomSheet
@@ -113,10 +113,10 @@ export function StationPanel({
             <p className="mt-1 text-[11px] text-muted">
               {next.platformNumber != null && `Platform ${next.platformNumber} · `}
               {next.atPlatform ? "At platform" : "Arriving"}
-              {next.train.delaySeconds > 0 && (
+              {isLate(next.train) && (
                 <span className="text-warning">
                   {" "}
-                  · +{formatDurationSeconds(next.train.delaySeconds)}
+                  · {formatDelay(next.train, formatDurationSeconds)}
                 </span>
               )}
             </p>

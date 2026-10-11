@@ -5,7 +5,16 @@ import type { Signal, TrainState } from "@/domain/trainsim";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { OccupancyBar } from "@/components/ui/OccupancyBar";
 import { LineBadge } from "@/components/ui/LineBadge";
-import { TRAIN_STATUS_LABEL, TRAIN_STATUS_TONE, describeTrainLocation } from "@/lib/metro/trainDisplay";
+import {
+  TRAIN_STATUS_LABEL,
+  TRAIN_STATUS_TONE,
+  describeTrainLocation,
+  formatDelay,
+  formatSpeed,
+  hasOccupancy,
+} from "@/lib/metro/trainDisplay";
+import { trainSourceLabel } from "@/lib/realtime/provenance";
+import { formatIstTimeOfDay } from "@/lib/realtime/serverClock";
 import { computeBlockChain } from "@/lib/metro/blockChain";
 
 interface TrainDetailsProps {
@@ -64,15 +73,23 @@ export function TrainDetails({ train, lines, stations, tracks, signals }: TrainD
 
       <div>
         <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">Occupancy</p>
-        <OccupancyBar count={train.passengerCount} capacity={train.capacity} />
+        {hasOccupancy(train) ? (
+          <OccupancyBar count={train.passengerCount} capacity={train.capacity} />
+        ) : (
+          <p className="text-xs text-muted">Not reported by this source</p>
+        )}
       </div>
 
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <Field label="Direction" value={train.direction === "OUTBOUND" ? "Outbound" : "Inbound"} />
-        <Field label="Speed" value={`${Math.round(train.speedKmph)} km/h`} />
-        <Field label="Delay" value={train.delaySeconds > 0 ? `+${train.delaySeconds}s` : "On time"} />
-        <Field label="Max speed" value={`${train.maxSpeedKmph} km/h`} />
-        <Field label="Dwell time" value={`${train.dwellTimeSeconds}s`} />
+        <Field label="Speed" value={formatSpeed(train.speedKmph)} />
+        <Field label="Delay" value={formatDelay(train, (s) => `${s}s`)} />
+        <Field label="Source" value={trainSourceLabel(train)} />
+        {train.observedAt && train.source !== "SIMULATION" && (
+          <Field label="Observed" value={formatIstTimeOfDay(Date.parse(train.observedAt))} />
+        )}
+        {train.maxSpeedKmph != null && <Field label="Max speed" value={`${train.maxSpeedKmph} km/h`} />}
+        {train.dwellTimeSeconds != null && <Field label="Dwell time" value={`${train.dwellTimeSeconds}s`} />}
       </dl>
 
       <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-secondary">

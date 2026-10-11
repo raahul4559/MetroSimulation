@@ -47,7 +47,8 @@ export function deriveAnnouncements(
     }
 
     if (visual.phase === "STOPPED") {
-      if (visual.delaySeconds >= DELAY_ANNOUNCEMENT_THRESHOLD_SECONDS) {
+      // An unknown delay (timetable estimate, feed without trip updates) is never announced.
+      if (visual.delaySeconds != null && visual.delaySeconds >= DELAY_ANNOUNCEMENT_THRESHOLD_SECONDS) {
         events.push(makeTrainEvent("DELAY", visual, station, platform));
       }
       const transferLines = otherLineNames(station, visual.lineCode);
@@ -108,7 +109,8 @@ function makeTrainEvent(
     nextStationName: visual.nextStationName || null,
     trainNumber: visual.code,
     direction: visual.direction,
-    delaySeconds: visual.delaySeconds,
+    // Only the DELAY template reads this, and DELAY is only raised when the delay is known.
+    delaySeconds: visual.delaySeconds ?? 0,
     transferLines: extra?.transferLines ?? null,
     disruptionDescription: extra?.disruptionDescription ?? null,
     disruptionType: null,

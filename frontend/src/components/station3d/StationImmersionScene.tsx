@@ -1,7 +1,7 @@
 "use client";
 
 import type { Line, Station } from "@/domain/metro";
-import type { Disruption, Passenger, SimulationClock, TrainState } from "@/domain/trainsim";
+import type { Disruption, Passenger, TrainState } from "@/domain/trainsim";
 import type { StationConfig } from "@/domain/stationConfig";
 import type { StationImmersionPhase } from "@/domain/stationImmersion";
 import { useStationSceneLoad } from "@/hooks/useStationSceneLoad";
@@ -16,7 +16,8 @@ interface StationImmersionSceneProps {
   trains: readonly TrainState[];
   passengers: readonly Passenger[];
   disruptions: readonly Disruption[];
-  clock: SimulationClock;
+  /** HH:MM:SS of the state on screen — simulated time, or server time in IST. */
+  clockTime: string;
   phase: StationImmersionPhase;
   sceneReady: boolean;
   onSceneReady: () => void;
@@ -47,7 +48,7 @@ export function StationImmersionScene({
   trains,
   passengers,
   disruptions,
-  clock,
+  clockTime,
   phase,
   sceneReady,
   onSceneReady,
@@ -89,7 +90,7 @@ export function StationImmersionScene({
             trains={trains}
             passengers={passengers}
             disruptions={disruptions}
-            clock={clock}
+            clockTime={clockTime}
             onBack={onBack}
             onReady={onSceneReady}
             chromeHidden={phase !== "immersed"}

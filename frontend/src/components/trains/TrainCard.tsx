@@ -4,7 +4,15 @@ import { cn } from "@/lib/ui/cn";
 import { LineBadge } from "@/components/ui/LineBadge";
 import { OccupancyBar } from "@/components/ui/OccupancyBar";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
-import { TRAIN_STATUS_LABEL, TRAIN_STATUS_TONE } from "@/lib/metro/trainDisplay";
+import {
+  TRAIN_STATUS_LABEL,
+  TRAIN_STATUS_TONE,
+  formatDelay,
+  formatSpeed,
+  hasOccupancy,
+  isLate,
+} from "@/lib/metro/trainDisplay";
+import { trainSourceLabel, trainSourceTone } from "@/lib/realtime/provenance";
 import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
 
 interface TrainCardProps {
@@ -37,7 +45,7 @@ export function TrainCard({
   const from = stationsById.get(train.previousStationId)?.name ?? `#${train.previousStationId}`;
   const to = stationsById.get(train.nextStationId)?.name ?? `#${train.nextStationId}`;
   const completed = train.status === "COMPLETED";
-  const late = train.delaySeconds > 0;
+  const late = isLate(train);
 
   const body = (
     <>
@@ -50,7 +58,7 @@ export function TrainCard({
           className="ml-1"
         />
         <span className="tabular ml-auto shrink-0 text-[11px] text-muted">
-          {Math.round(train.speedKmph)} km/h
+          {formatSpeed(train.speedKmph)}
         </span>
       </div>
 
@@ -64,14 +72,21 @@ export function TrainCard({
         <span
           className={cn("tabular shrink-0 text-[11px]", late ? "text-warning" : "text-muted")}
         >
-          {late ? `+${formatDurationSeconds(train.delaySeconds)}` : "On time"}
+          {formatDelay(train, formatDurationSeconds)}
         </span>
-        {!compact && (
+        {!compact && hasOccupancy(train) && (
           <OccupancyBar
             count={train.passengerCount}
             capacity={train.capacity}
             compact
             className="min-w-0 flex-1"
+          />
+        )}
+        {(train.source !== "SIMULATION" || train.stale) && (
+          <StatusIndicator
+            label={trainSourceLabel(train)}
+            tone={trainSourceTone(train)}
+            className="ml-auto text-[10px]"
           />
         )}
       </div>

@@ -23,6 +23,7 @@ import { ActiveDisruptionsList } from "@/components/disruptions/ActiveDisruption
 import { HeadwayPanel } from "@/components/operations/HeadwayPanel";
 import { StationCongestionPanel } from "@/components/operations/StationCongestionPanel";
 import { formatDurationSeconds } from "@/lib/metro/passengerDisplay";
+import { delayStats } from "@/lib/metro/trainDisplay";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 
 /**
@@ -38,7 +39,8 @@ import { StatusIndicator } from "@/components/ui/StatusIndicator";
  */
 export default function OperationsPage() {
   const { lines, stations, tracks } = useNetworkData();
-  const { trains, signals, passengers, disruptions, passengerMetrics, clock } = useSimulationData();
+  const { trains, signals, passengers, disruptions, passengerMetrics, clock, feed, isSimulationSource } =
+    useSimulationData();
   const { hiddenLineCodes, toggleLine } = useLineVisibilityContext();
   const { selectedTrainId, selectTrain } = useTrainSelection();
   const simActions = useSimulationActions();
@@ -56,12 +58,11 @@ export default function OperationsPage() {
 
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) ?? null;
   const running = trains.filter((t) => t.status !== "SCHEDULED" && t.status !== "COMPLETED");
-  const delayed = running.filter((t) => t.delaySeconds > 0);
-  const onTimePct = running.length === 0 ? 100 : ((running.length - delayed.length) / running.length) * 100;
-  const avgDelay =
-    running.length === 0
-      ? 0
-      : Math.round(running.reduce((sum, t) => sum + t.delaySeconds, 0) / running.length);
+  // Delay figures cover only trains whose source reports a delay — a timetable estimate knows none.
+  const delays = delayStats(running);
+  const onTimePct =
+    delays.knownCount === 0 ? null : ((delays.knownCount - delays.delayedCount) / delays.knownCount) * 100;
+  const avgDelay = delays.knownCount === 0 ? 0 : Math.round(delays.totalDelaySeconds / delays.knownCount);
   const waitingNow = passengers.filter(
     (p) => p.status === "WAITING" || p.status === "TRANSFER",
   ).length;
@@ -76,14 +77,20 @@ export default function OperationsPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-content">Live Operations</h1>
           <p className="mt-1 text-xs text-secondary">
-            Everything currently happening on the network, updated every simulation tick.
+            Everything currently happening on the network, from the active data source.
           </p>
         </div>
-        <StatusIndicator
-          label={clock.status === "RUNNING" ? "Simulation running" : `Simulation ${clock.status.toLowerCase()}`}
-          tone={clock.status === "RUNNING" ? "positive" : "neutral"}
-          size="md"
-        />
+        {isSimulationSource ? (
+          <StatusIndicator
+            label={clock.status === "RUNNING" ? "Simulation running" : `Simulation ${clock.status.toLowerCase()}`}
+            tone={clock.status === "RUNNING" ? "positive" : "neutral"}
+            size="md"
+          />
+        ) : (
+          <span title={feed.detail}>
+            <StatusIndicator label={feed.label} tone={feed.tone} size="md" />
+          </span>
+        )}
       </header>
 
       {/* Network status — a compact row, not six oversized cards. */}
@@ -92,9 +99,11 @@ export default function OperationsPage() {
           <Metric label="Trains running" value={running.length} />
           <Metric
             label="On time"
-            value={onTimePct.toFixed(0)}
-            unit="%"
-            tone={onTimePct >= 90 ? "positive" : onTimePct >= 75 ? "warning" : "danger"}
+            value={onTimePct == null ? "—" : onTimePct.toFixed(0)}
+            {...(onTimePct != null && { unit: "%" })}
+            tone={
+              onTimePct == null ? "neutral" : onTimePct >= 90 ? "positive" : onTimePct >= 75 ? "warning" : "danger"
+            }
           />
           <Metric
             label="Avg delay"

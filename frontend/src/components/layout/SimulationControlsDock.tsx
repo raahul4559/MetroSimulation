@@ -17,7 +17,7 @@ import { TrainSimulationControls } from "@/components/trains/TrainSimulationCont
  * whichever panel produced them, which shifted the layout and was invisible if you had scrolled.
  */
 export function SimulationControlsDock() {
-  const { state } = useSimulationData();
+  const { state, clock, isSimulationSource } = useSimulationData();
   const actions = useSimulationActions();
   const { push } = useToast();
 
@@ -33,7 +33,8 @@ export function SimulationControlsDock() {
       className="pointer-events-auto max-w-[calc(100vw-1.5rem)] overflow-x-auto px-3 py-2"
     >
       <TrainSimulationControls
-        state={state}
+        clock={state ? clock : null}
+        isSimulationSource={isSimulationSource}
         isBusy={actions.isBusy}
         onStart={actions.start}
         onPause={actions.pause}

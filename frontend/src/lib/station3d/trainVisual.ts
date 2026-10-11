@@ -37,6 +37,8 @@ export function selectStationTrainVisuals(
       passengerCount: train.passengerCount,
       capacity: train.capacity,
       delaySeconds: train.delaySeconds,
+      source: train.source,
+      stale: train.stale,
       destinationStationName: destination?.name ?? "",
       destinationStationCode: destination?.code ?? null,
       nextStationName: nextStation?.name ?? "",

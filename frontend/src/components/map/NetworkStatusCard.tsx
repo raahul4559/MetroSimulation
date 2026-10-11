@@ -4,6 +4,7 @@ import type { Disruption, TrainState } from "@/domain/trainsim";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { Surface } from "@/components/ui/Surface";
 import type { Tone } from "@/lib/ui/tone";
+import { isLate } from "@/lib/metro/trainDisplay";
 
 interface NetworkStatusCardProps {
   stationCount: number;
@@ -41,7 +42,7 @@ function serviceState(
   }
 
   const running = trains.filter((t) => t.status !== "SCHEDULED" && t.status !== "COMPLETED");
-  const delayed = running.filter((t) => t.delaySeconds > 0);
+  const delayed = running.filter(isLate);
   // A tenth of the fleet running late is the point at which "normal service" stops being true.
   if (running.length > 0 && delayed.length / running.length > 0.1) {
     return { label: "Minor delays", tone: "warning" };

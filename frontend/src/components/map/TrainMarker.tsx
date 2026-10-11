@@ -2,6 +2,7 @@ import type { TrainState } from "@/domain/trainsim";
 import type { Point } from "@/lib/geometry/projection";
 import { SURFACE_HEX, TONE_HEX } from "@/lib/ui/tone";
 import { vividize } from "@/lib/ui/lineColor";
+import { trainSourceLabel } from "@/lib/realtime/provenance";
 
 interface TrainMarkerProps {
   train: TrainState;
@@ -22,7 +23,8 @@ const HELD_STATUSES = new Set(["STOPPED", "DELAYED"]);
  * language from a station's circle and a signal's square, so the three are distinguishable at a
  * glance without relying on colour. Counter-scaled like `StationMarker` so it stays a constant
  * on-screen size at any zoom. An amber ring flags a train currently held for headway or past the
- * delay threshold.
+ * delay threshold. A stale observation (the feed hasn't placed it recently) is drawn faded with a
+ * dashed outline — it is where the train *was*, not where it is.
  */
 export function TrainMarker({
   train,
@@ -34,15 +36,16 @@ export function TrainMarker({
   onSelect,
 }: TrainMarkerProps) {
   const isHeld = HELD_STATUSES.has(train.status);
+  const stale = train.stale;
 
   return (
     <g
       transform={`translate(${point.x} ${point.y}) scale(${1 / scale})`}
       role="button"
       tabIndex={0}
-      aria-label={`Train ${train.code}`}
+      aria-label={`Train ${train.code}, ${trainSourceLabel(train)}`}
       className="cursor-pointer outline-none transition-opacity duration-(--duration-base)"
-      opacity={dimmed ? 0.35 : 1}
+      opacity={dimmed ? 0.35 : stale ? 0.55 : 1}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -68,8 +71,9 @@ export function TrainMarker({
         height={6.5}
         rx={3.25}
         fill={vividize(colorHex)}
-        stroke={isHeld ? TONE_HEX.warning : SURFACE_HEX.canvas}
-        strokeWidth={isHeld ? 1.75 : 1.25}
+        stroke={isHeld || stale ? TONE_HEX.warning : SURFACE_HEX.canvas}
+        strokeWidth={isHeld || stale ? 1.75 : 1.25}
+        {...(stale && { strokeDasharray: "2 1.5" })}
       />
     </g>
   );

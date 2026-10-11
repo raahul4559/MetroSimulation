@@ -61,3 +61,6 @@ export const metroApiClient = createApiClient(env.metroApiBaseUrl);
 
 /** The discrete-time train simulation engine — `/api/simulation/*`, a separate base path on the same backend. */
 export const trainSimApiClient = createApiClient(env.trainSimApiBaseUrl);
+
+/** The canonical realtime state — `/api/realtime/*`: whichever source is active, with provenance. */
+export const realtimeApiClient = createApiClient(env.realtimeApiBaseUrl);

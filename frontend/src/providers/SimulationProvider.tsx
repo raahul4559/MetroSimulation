@@ -12,7 +12,8 @@ import {
 } from "react";
 import type { CreateDisruptionRequest, PassengerMetrics, SimulationClock } from "@/domain/trainsim";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useTrainSimulation } from "@/hooks/useTrainSimulation";
+import { useMetroRealtime } from "@/hooks/useMetroRealtime";
+import { useSimulationControls } from "@/hooks/useSimulationControls";
 import { useLineVisibility } from "@/hooks/useLineVisibility";
 import { useDisruptions } from "@/hooks/useDisruptions";
 import type {
@@ -23,15 +24,21 @@ import type {
   SimulationActionsValue,
   SimulationDataValue,
 } from "./simulation-types";
+import { describeFeed } from "@/lib/realtime/provenance";
+import { simulatedTimeOfDay } from "@/lib/metro/clockDisplay";
+import { formatIstTimeOfDay } from "@/lib/realtime/serverClock";
 
 /**
- * The single owner of the live simulation connection.
+ * The frontend store: the single owner of the realtime connection.
  *
- * `useTrainSimulation` opens a new STOMP client per call — one `Client`, one subscription to
- * `/topic/train-simulation/state`, one seed fetch, per component that calls it. That was invisible
- * while exactly one page used it; the moment the network view and the operations view both wanted
- * live state it would have meant two sockets delivering two independently-diverging copies of the
- * same simulation. So this provider calls each data hook exactly once and publishes the result.
+ * It subscribes once to the canonical `/topic/realtime/state` (via `useMetroRealtime`) and
+ * publishes that one frame to every view — 2D map, 3D station, boards, announcements, operations —
+ * so they cannot disagree about where a train is or where that position came from. Whether the
+ * frame came from an authorized feed, GTFS-Realtime, the timetable or the simulation is decided on
+ * the server; nothing here branches on it except to label it (`feed`, from `describeFeed`).
+ *
+ * Opening one socket per consumer would mean independently-diverging copies of the same state, so
+ * this provider calls each data hook exactly once and publishes the result.
  *
  * It is mounted by the `(live)` route group's layout rather than the root layout, which is what
  * keeps /stations and /analytics from opening a socket they have no use for.
@@ -49,7 +56,7 @@ const LineVisibilityContext = createContext<LineVisibilityValue | null>(null);
 const DisruptionActionsContext = createContext<DisruptionActionsValue | null>(null);
 const SelectionContext = createContext<SelectionValue | null>(null);
 
-/** Fallbacks for the window between first paint and the first frame off the socket. */
+/** Fallbacks for the window before the first frame, and while a non-simulation source is active. */
 const EMPTY_PASSENGER_METRICS: PassengerMetrics = {
   totalGenerated: 0,
   totalServed: 0,
@@ -70,7 +77,8 @@ const EMPTY_CLOCK: SimulationClock = {
 
 export function SimulationProvider({ children }: PropsWithChildren) {
   const network = useNetwork();
-  const sim = useTrainSimulation();
+  const realtime = useMetroRealtime();
+  const sim = useSimulationControls(realtime.refresh);
   const lineVisibility = useLineVisibility();
   const disruptions = useDisruptions();
 
@@ -79,7 +87,7 @@ export function SimulationProvider({ children }: PropsWithChildren) {
   const [focusToken, setFocusToken] = useState(0);
 
   /*
-   * `useTrainSimulation` and `useDisruptions` both return a fresh object with fresh arrow functions
+   * `useSimulationControls` and `useDisruptions` both return a fresh object with fresh arrow functions
    * on every render. We are not changing those hooks, so the identities are stabilised here, at the
    * boundary, using the ref-then-effect idiom already used elsewhere in this codebase (see
    * MetroMap's `trainsRef`). Without this, every consumer of the actions context would re-render on
@@ -125,25 +133,52 @@ export function SimulationProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const { state } = sim;
+  const { frame, connectionStatus, stalled } = realtime;
 
-  const data = useMemo<SimulationDataValue>(
-    () => ({
-      state,
-      connectionStatus: sim.connectionStatus,
-      clock: state?.clock ?? EMPTY_CLOCK,
-      trains: state?.trains ?? [],
-      signals: state?.signals ?? [],
-      passengers: state?.passengers ?? [],
-      disruptions: state?.disruptions ?? [],
-      passengerMetrics: state?.passengerMetrics ?? EMPTY_PASSENGER_METRICS,
-    }),
-    [state, sim.connectionStatus],
-  );
+  const data = useMemo<SimulationDataValue>(() => {
+    const extras = frame?.simulation ?? null;
+    const clock = extras?.clock ?? EMPTY_CLOCK;
+    const trains = frame?.trains ?? [];
+    const lineStatuses = frame?.lines ?? [];
+    return {
+      state: frame,
+      connectionStatus,
+      feed: describeFeed(frame, connectionStatus, stalled),
+      isSimulationSource: frame?.activeSource === "SIMULATION",
+      clock,
+      // The simulated instant is wall-clock-free; every other source runs on server time in IST.
+      timeOfDay: extras
+        ? simulatedTimeOfDay(clock.currentTime)
+        : frame
+          ? formatIstTimeOfDay(frame.serverEpochMillis)
+          : "--:--:--",
+      serviceRunning: extras
+        ? clock.status === "RUNNING"
+        : trains.length > 0 || lineStatuses.some((l) => l.state === "OPERATING"),
+      trains,
+      lineStatuses,
+      alerts: frame?.alerts ?? [],
+      providers: frame?.providers ?? [],
+      // Signals, passengers and injected disruptions exist only inside the simulation; no feed
+      // reports them, and none are invented when another source is active.
+      signals: extras?.signals ?? [],
+      passengers: extras?.passengers ?? [],
+      disruptions: extras?.disruptions ?? [],
+      passengerMetrics: extras?.passengerMetrics ?? EMPTY_PASSENGER_METRICS,
+    };
+  }, [frame, connectionStatus, stalled]);
 
   const actions = useMemo<SimulationActionsValue>(
-    () => ({ isBusy: sim.isBusy, error: sim.error, start, pause, stop, reset, setSpeed }),
-    [sim.isBusy, sim.error, start, pause, stop, reset, setSpeed],
+    () => ({
+      isBusy: sim.isBusy,
+      error: sim.error ?? realtime.error,
+      start,
+      pause,
+      stop,
+      reset,
+      setSpeed,
+    }),
+    [sim.isBusy, sim.error, realtime.error, start, pause, stop, reset, setSpeed],
   );
 
   const networkValue = useMemo<NetworkValue>(

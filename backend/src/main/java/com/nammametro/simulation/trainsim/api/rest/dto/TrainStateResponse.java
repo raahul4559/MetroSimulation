@@ -23,8 +23,12 @@ public record TrainStateResponse(
         int delaySeconds,
         Integer scheduledArrivalSeconds,
         Integer actualArrivalSeconds,
-        Integer actualDepartureSeconds
+        Integer actualDepartureSeconds,
+        String source
 ) {
+
+    /** Every train response names its provenance; this endpoint only ever serves the simulation. */
+    private static final String SOURCE = "SIMULATION";
 
     public static TrainStateResponse from(TrainState train) {
         return new TrainStateResponse(
@@ -48,7 +52,8 @@ public record TrainStateResponse(
                 train.delaySeconds(),
                 train.scheduledArrivalSeconds(),
                 train.actualArrivalSeconds(),
-                train.actualDepartureSeconds()
+                train.actualDepartureSeconds(),
+                SOURCE
         );
     }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Pause, Play, RotateCcw, Square } from "lucide-react";
-import type { SimulationState } from "@/domain/trainsim";
+import type { SimulationClock } from "@/domain/trainsim";
 import { SIMULATION_SPEEDS } from "@/domain/trainsim";
 import { Button } from "@/components/ui/Button";
 import { IconButton } from "@/components/ui/IconButton";
@@ -13,7 +13,11 @@ import { formatRealDateTime, simulatedTimeOfDay } from "@/lib/metro/clockDisplay
 import { useRealDateTime } from "@/hooks/useRealDateTime";
 
 interface TrainSimulationControlsProps {
-  state: SimulationState | null;
+  /** The simulation clock, or null before the first frame. */
+  clock: SimulationClock | null;
+  /** False while another source (feed/timetable) is on screen: the controls still drive the
+   * simulation engine, but say plainly that it isn't what's being shown. */
+  isSimulationSource?: boolean;
   isBusy: boolean;
   onStart: () => void;
   onPause: () => void;
@@ -47,7 +51,8 @@ const SPEED_OPTIONS: readonly SegmentOption<number>[] = SIMULATION_SPEEDS.map((s
 }));
 
 export function TrainSimulationControls({
-  state,
+  clock,
+  isSimulationSource = true,
   isBusy,
   onStart,
   onPause,
@@ -58,7 +63,7 @@ export function TrainSimulationControls({
 }: TrainSimulationControlsProps) {
   const realDateTime = useRealDateTime();
 
-  if (!state) {
+  if (!clock) {
     return (
       <p className={cn("text-xs text-muted", layout === "dock" && "px-2")}>
         Loading simulation state…
@@ -66,7 +71,6 @@ export function TrainSimulationControls({
     );
   }
 
-  const { clock } = state;
   const isRunning = clock.status === "RUNNING";
   const canStop = clock.status !== "STOPPED";
 
@@ -78,8 +82,8 @@ export function TrainSimulationControls({
             {simulatedTimeOfDay(clock.currentTime)}
           </span>
           <StatusIndicator
-            label={STATUS_LABEL[clock.status]}
-            tone={STATUS_TONE[clock.status]}
+            label={isSimulationSource ? STATUS_LABEL[clock.status] : "Sim not shown"}
+            tone={isSimulationSource ? STATUS_TONE[clock.status] : "neutral"}
             className="mt-1 text-[10px]"
           />
         </div>
@@ -136,6 +140,11 @@ export function TrainSimulationControls({
       </div>
 
       <p className="tabular text-[11px] text-muted">Real time · {formatRealDateTime(realDateTime)}</p>
+      {!isSimulationSource && (
+        <p className="text-[11px] text-muted">
+          Another data source is on screen; these controls only affect the simulation engine.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         <Button

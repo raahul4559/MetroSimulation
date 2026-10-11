@@ -62,6 +62,12 @@
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
+		<!-- GTFS-Realtime protobuf bindings (MobilityData) — used only by GtfsRealtimeProvider. -->
+		<dependency>
+			<groupId>org.mobilitydata</groupId>
+			<artifactId>gtfs-realtime-bindings</artifactId>
+			<version>0.2.0</version>
+		</dependency>
 
 		<dependency>
 			<groupId>org.postgresql</groupId>

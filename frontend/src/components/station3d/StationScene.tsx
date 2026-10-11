@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import type { Line, Station } from "@/domain/metro";
-import type { Disruption, Passenger, SimulationClock, TrainState } from "@/domain/trainsim";
+import type { Disruption, Passenger, TrainState } from "@/domain/trainsim";
 import type { CameraMode3D } from "@/domain/station3d";
 import { buildStationLayout3D } from "@/lib/station3d/layout";
 import { findUpcomingTrainCode, selectStationTrainVisuals } from "@/lib/station3d/trainVisual";
@@ -15,7 +15,6 @@ import { CameraController } from "./CameraController";
 import { AudioListenerSync } from "./AudioListenerSync";
 import { SceneReadySignal } from "./SceneReadySignal";
 import { Station3DOverlay } from "./Station3DOverlay";
-import { simulatedTimeOfDay } from "@/lib/metro/clockDisplay";
 import { useStationAsset } from "@/hooks/useStationAsset";
 import { useStationReferences } from "@/hooks/useStationReferences";
 import { useStationAnnouncements } from "@/hooks/useStationAnnouncements";
@@ -29,7 +28,8 @@ interface StationSceneProps {
   trains: readonly TrainState[];
   passengers: readonly Passenger[];
   disruptions?: readonly Disruption[];
-  clock: SimulationClock;
+  /** HH:MM:SS of the state on screen — simulated time, or server time in IST. */
+  clockTime: string;
   onBack: () => void;
   /**
    * Fired once the canvas has actually drawn its first frames for this station — the signal a
@@ -46,7 +46,7 @@ interface StationSceneProps {
  * The 3D station view's top-level component: builds the station's procedural layout and resolves
  * which real trains are currently visible there, owns camera-mode/selection/audio UI state, and
  * renders the WebGL canvas plus its HTML overlay. Everything it feeds into the scene comes from the
- * same `SimulationState` the 2D map reads (`trains`, `passengers`, `clock`) and the same network
+ * same canonical realtime state the 2D map reads (`trains`, `passengers`, time) and the same network
  * data (`lines`/`stations`) — this component runs no simulation of its own. Announcements
  * (`useStationAnnouncements` deriving events, `AnnouncementService` speaking them) and non-speech
  * audio (`audioManager`) are likewise both driven purely by the real `TrainVisual3D`
@@ -61,7 +61,7 @@ export function StationScene({
   trains,
   passengers,
   disruptions = [],
-  clock,
+  clockTime,
   onBack,
   onReady,
   chromeHidden = false,
@@ -208,7 +208,7 @@ export function StationScene({
             ? `Platform ${selectedPlatform.platformNumber} · ${selectedPlatform.lineName}`
             : null
         }
-        clockTime={simulatedTimeOfDay(clock.currentTime)}
+        clockTime={clockTime}
         cameraMode={cameraMode}
         onCameraModeChange={setCameraMode}
         onResetCamera={() => setResetToken((t) => t + 1)}

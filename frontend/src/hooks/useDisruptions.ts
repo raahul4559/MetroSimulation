@@ -11,7 +11,7 @@ interface DisruptionActionsResult {
 }
 
 /** Create/cancel actions for disruptions. The disruption list itself is read straight off the live
- * `SimulationState` (already streamed over WS via `useTrainSimulation`) rather than fetched here —
+ * canonical realtime state (its simulation extras, streamed by `SimulationProvider`) rather than fetched here —
  * this hook only needs to trigger the two mutations and surface busy/error state for the form. */
 export function useDisruptions(): DisruptionActionsResult {
   const [isBusy, setIsBusy] = useState(false);

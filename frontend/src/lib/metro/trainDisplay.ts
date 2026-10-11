@@ -56,3 +56,55 @@ export function describeTrainLocation(
       return `Between ${prev} and ${next} (${Math.round(train.progress * 100)}%)`;
   }
 }
+
+/**
+ * Null-aware readouts. A field a source can't know (passengers from a GTFS feed, delay from a
+ * timetable) is `null`; these render it as unknown instead of letting it read as zero or on time.
+ */
+export function formatSpeed(speedKmph: number | null): string {
+  return speedKmph == null ? "— km/h" : `${Math.round(speedKmph)} km/h`;
+}
+
+/** True only when the source reports a positive delay; unknown is not late. */
+export function isLate(train: Pick<TrainState, "delaySeconds">): boolean {
+  return train.delaySeconds != null && train.delaySeconds > 0;
+}
+
+/** "+2m 10s", "On time", or "Delay unknown" — formatted with the caller's duration formatter. */
+export function formatDelay(
+  train: Pick<TrainState, "delaySeconds">,
+  formatDuration: (seconds: number) => string,
+): string {
+  if (train.delaySeconds == null) return "Delay unknown";
+  return train.delaySeconds > 0 ? `+${formatDuration(train.delaySeconds)}` : "On time";
+}
+
+/**
+ * Delay statistics over only the trains whose delay is known. `knownCount` 0 means "no delay
+ * information at all" — callers show a dash, not a perfect on-time score.
+ */
+export function delayStats(trains: readonly Pick<TrainState, "delaySeconds">[]): {
+  knownCount: number;
+  delayedCount: number;
+  totalDelaySeconds: number;
+  maxDelaySeconds: number;
+} {
+  let knownCount = 0;
+  let delayedCount = 0;
+  let totalDelaySeconds = 0;
+  let maxDelaySeconds = 0;
+  for (const t of trains) {
+    if (t.delaySeconds == null) continue;
+    knownCount++;
+    totalDelaySeconds += t.delaySeconds;
+    maxDelaySeconds = Math.max(maxDelaySeconds, t.delaySeconds);
+    if (t.delaySeconds > 0) delayedCount++;
+  }
+  return { knownCount, delayedCount, totalDelaySeconds, maxDelaySeconds };
+}
+
+export function hasOccupancy(
+  train: Pick<TrainState, "passengerCount" | "capacity">,
+): train is typeof train & { passengerCount: number; capacity: number } {
+  return train.passengerCount != null && train.capacity != null;
+}

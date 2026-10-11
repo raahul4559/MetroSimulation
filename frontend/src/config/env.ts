@@ -25,4 +25,9 @@ export const env = {
     process.env.NEXT_PUBLIC_ANNOUNCEMENT_API_BASE_URL
   ),
   wsUrl: requireEnv("NEXT_PUBLIC_WS_URL", process.env.NEXT_PUBLIC_WS_URL),
+  /** The canonical realtime state — `/api/realtime/*`. Optional: defaults to the same backend
+   * origin as the metro API, so existing `.env.local` files keep working. */
+  realtimeApiBaseUrl:
+    process.env.NEXT_PUBLIC_REALTIME_API_BASE_URL ||
+    `${new URL(requireEnv("NEXT_PUBLIC_METRO_API_BASE_URL", process.env.NEXT_PUBLIC_METRO_API_BASE_URL)).origin}/api/realtime`,
 } as const;

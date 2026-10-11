@@ -42,3 +42,45 @@ announcement:
     voice-en: ${GOOGLE_TTS_VOICE_EN:en-IN-Neural2-A}
     voice-hi: ${GOOGLE_TTS_VOICE_HI:hi-IN-Neural2-A}
     voice-kn: ${GOOGLE_TTS_VOICE_KN:kn-IN-Standard-A}
+
+# Realtime digital twin — see docs/realtime.md. Every external endpoint is configuration and empty by
+# default, which leaves that provider UNCONFIGURED (never polled, never guessed). With nothing
+# configured, AUTO mode falls back to the simulation and labels it as such.
+realtime:
+  mode: ${REALTIME_MODE:AUTO}
+  publish-interval-ms: ${REALTIME_PUBLISH_INTERVAL_MS:1000}
+  stale-after: ${REALTIME_STALE_AFTER:90s}
+  expire-after: ${REALTIME_EXPIRE_AFTER:5m}
+  max-clock-skew: ${REALTIME_MAX_CLOCK_SKEW:30s}
+  max-snap-distance-metres: ${REALTIME_MAX_SNAP_DISTANCE_METRES:1500}
+  max-backoff: ${REALTIME_MAX_BACKOFF:5m}
+  official:
+    url: ${REALTIME_OFFICIAL_URL:}
+    auth-header-name: ${REALTIME_OFFICIAL_AUTH_HEADER_NAME:Authorization}
+    auth-header-value: ${REALTIME_OFFICIAL_AUTH_HEADER_VALUE:}
+    poll-interval: ${REALTIME_OFFICIAL_POLL_INTERVAL:15s}
+  gtfs:
+    vehicle-positions-url: ${REALTIME_GTFS_VEHICLE_POSITIONS_URL:}
+    trip-updates-url: ${REALTIME_GTFS_TRIP_UPDATES_URL:}
+    alerts-url: ${REALTIME_GTFS_ALERTS_URL:}
+    auth-header-name: ${REALTIME_GTFS_AUTH_HEADER_NAME:}
+    auth-header-value: ${REALTIME_GTFS_AUTH_HEADER_VALUE:}
+    poll-interval: ${REALTIME_GTFS_POLL_INTERVAL:15s}
+    # Feed identifiers -> this network's codes. Unmapped ids fall back to matching station/line codes.
+    # mapping:
+    #   stop-ids: { "<feed stop_id>": MAJESTIC }
+    #   route-ids: { "<feed route_id>": PURPLE }
+    #   direction-ids: { 0: OUTBOUND, 1: INBOUND }
+  timetable:
+    # Cite the published BMRCL notice these hours come from. Left empty on purpose: no hours are
+    # assumed. Example shape (NOT real hours — replace from the official source):
+    # source: "BMRCL notice <ref>, effective <date>"
+    # service-day-rollover: "03:00"
+    # holidays: [2026-11-01]
+    # lines:
+    #   PURPLE:
+    #     weekday:
+    #       - { from: "HH:mm", to: "HH:mm", headway-seconds: 300 }
+    #     sunday:
+    #       - { from: "HH:mm", to: "HH:mm", headway-seconds: 600 }
+    source: ""

@@ -7,6 +7,8 @@ import { lineVividColor } from "@/lib/ui/lineColor";
 import { OccupancyBar } from "@/components/ui/OccupancyBar";
 import { StatusIndicator } from "@/components/ui/StatusIndicator";
 import { Surface } from "@/components/ui/Surface";
+import { formatDelay, hasOccupancy, isLate } from "@/lib/metro/trainDisplay";
+import { trainSourceLabel, trainSourceTone } from "@/lib/realtime/provenance";
 import type { Tone } from "@/lib/ui/tone";
 
 const PHASE_LABEL: Record<TrainPhase3D, string> = {
@@ -63,7 +65,8 @@ export function TrainInfoBar({
     );
   }
 
-  const late = train.delaySeconds > 0;
+  const late = isLate(train);
+  const occupancy = hasOccupancy(train) ? train : null;
 
   return (
     <div className="pointer-events-auto flex flex-col items-center gap-2">
@@ -123,23 +126,28 @@ export function TrainInfoBar({
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted">Load</p>
           <p className="tabular mt-0.5 text-xs text-content">
-            {formatOccupancyPercent(train.passengerCount, train.capacity)}
+            {occupancy ? formatOccupancyPercent(occupancy.passengerCount, occupancy.capacity) : "—"}
           </p>
         </div>
 
         <div className="ml-auto flex flex-col items-end gap-1">
           <StatusIndicator label={PHASE_LABEL[train.phase]} tone={PHASE_TONE[train.phase]} />
           <span className={cn("tabular text-[11px]", late ? "text-warning" : "text-muted")}>
-            {late ? `+${formatDurationSeconds(train.delaySeconds)}` : "On time"}
+            {formatDelay(train, formatDurationSeconds)}
           </span>
+          {(train.source !== "SIMULATION" || train.stale) && (
+            <StatusIndicator label={trainSourceLabel(train)} tone={trainSourceTone(train)} className="text-[10px]" />
+          )}
         </div>
 
-        <OccupancyBar
-          count={train.passengerCount}
-          capacity={train.capacity}
-          compact
-          className="basis-full"
-        />
+        {occupancy && (
+          <OccupancyBar
+            count={occupancy.passengerCount}
+            capacity={occupancy.capacity}
+            compact
+            className="basis-full"
+          />
+        )}
 
         {(train.phase === "BOARDING" || nextTrainCode) && (
           <p className="basis-full text-[11px] text-muted">

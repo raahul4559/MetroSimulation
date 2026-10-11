@@ -1,3 +1,4 @@
+import type { DataSource } from "./realtime";
 import type { Station } from "./metro/station";
 import type { TrainDirection } from "./trainsim/trainState";
 
@@ -60,9 +61,12 @@ export interface TrainVisual3D {
    * the backend's whole-track {@code progress}, not that raw value. See
    * {@code lib/station3d/trainVisual.ts} for the remap windows. */
   readonly localProgress: number;
-  readonly passengerCount: number;
-  readonly capacity: number;
-  readonly delaySeconds: number;
+  /** Null when the active source doesn't report it — see `TrainState`. */
+  readonly passengerCount: number | null;
+  readonly capacity: number | null;
+  readonly delaySeconds: number | null;
+  readonly source: DataSource;
+  readonly stale: boolean;
   readonly destinationStationName: string;
   /** Real network code of {@code destinationStationName} — {@code null} only if that name couldn't
    * be resolved to a real {@code Station} (station data momentarily incomplete). Used to look up the
